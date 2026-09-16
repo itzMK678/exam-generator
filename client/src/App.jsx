@@ -413,68 +413,26 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
 
-      {/* ==================================================
-          NAVBAR
-      ================================================== */}
-
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-18 max-w-6xl items-center justify-between px-5 sm:px-6">
-
-          <div className="flex items-center gap-3">
-
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 font-bold text-white">
-              E
-            </div>
-
-            <span className="text-xl font-bold tracking-tight">
-              ExamForge
-            </span>
-
-          </div>
-
-          <button
-            type="button"
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            Dashboard
-          </button>
-
-        </div>
-      </header>
-
-
-      {/* ==================================================
-          MAIN
-      ================================================== */}
+     
 
       <main className="mx-auto max-w-4xl px-5 py-12 sm:px-6 sm:py-16">
-
-        {/* ==================================================
-            HERO
-        ================================================== */}
-
+        {/* //Heading  */}
         <section className="mb-12 text-center">
-
-          <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600">
-            AI-Powered Exam Generator
-          </span>
 
           <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-slate-950 sm:text-6xl">
 
-            Create an exam
+            Create exams
             <br />
 
             <span className="text-indigo-600">
-              from your documents.
+              from your documents and Pdf.
             </span>
 
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-500 sm:text-lg">
 
-            Upload your study material and let
-            ExamForge create source-grounded
-            questions using RAG.
+            Upload your study material and create exams of different pattern using RAG.
 
           </p>
 
@@ -508,9 +466,7 @@ function App() {
         )}
 
 
-        {/* ==================================================
-            UPLOAD CARD
-        ================================================== */}
+        {/* to upload pdf */}
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 
@@ -559,7 +515,7 @@ function App() {
               event.preventDefault()
             }
             onDrop={handleDrop}
-            className="group flex min-h-60 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40"
+            className="group gap-3 flex min-h-30 cursor-pointer items-center justify-center rounded-xl border-2  border-slate-300 bg-slate-50 px-5 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40"
           >
 
             <input
@@ -595,13 +551,13 @@ function App() {
           {/* FILE LIST */}
 
           {files.length > 0 && (
-            <div className="mt-4 space-y-2">
+            <div className=" mt-4 space-y-2">
 
               {files.map((file, index) => (
 
                 <div
                   key={`${file.name}-${file.size}-${index}`}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-3"
+                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-green-50 p-3"
                 >
 
                   <div className="flex min-w-0 items-center gap-3">
@@ -636,131 +592,24 @@ function App() {
                     onClick={() =>
                       removeFile(index)
                     }
-                    className="shrink-0 text-xs font-medium text-slate-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 text-xs text-extrabold text-slate-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Remove
+                   X
                   </button>
 
                 </div>
 
               ))}
-
-            </div>
-          )}
-
-
-          {/* UPLOAD PROGRESS */}
-
-          {isUploading && (
-            <div className="mt-5">
-
-              <div className="mb-2 flex items-center justify-between">
-
-                <span className="text-xs font-semibold text-slate-600">
-                  Uploading and processing...
-                </span>
-
-                <span className="text-xs font-bold text-indigo-600">
-                  {uploadProgress}%
-                </span>
-
-              </div>
-
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
-                <div
-                  className="h-full rounded-full bg-indigo-600 transition-all duration-300"
-                  style={{
-                    width: `${uploadProgress}%`,
-                  }}
-                />
-
-              </div>
-
-            </div>
-          )}
-
-        </section>
-
-
-        {/* ==================================================
-            PROCESSING RESULT
-        ================================================== */}
-
-        {uploadResult && (
-          <section className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5">
-
-            <div className="flex items-start gap-3">
-
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 font-bold text-green-600">
-                ✓
-              </div>
-
-              <div className="min-w-0">
-
-                <h3 className="font-bold text-green-900">
-                  Documents processed
-                </h3>
-
-                <p className="mt-1 text-sm text-green-700">
-                  {uploadResult.successful} of{" "}
-                  {uploadResult.total} documents
-                  were successfully processed.
-                </p>
-
-              </div>
-
-            </div>
-
-
-            {uploadResult.documents?.length > 0 && (
-              <div className="mt-4 space-y-2">
-
-                {uploadResult.documents.map(
-                  (document) => (
-
-                    <div
-                      key={document.id}
-                      className="flex items-center justify-between rounded-lg border border-green-200 bg-white/70 px-3 py-2"
-                    >
-
-                      <span className="truncate text-sm font-medium text-slate-700">
-                        {document.filename}
-                      </span>
-
-                      <span className="ml-3 shrink-0 text-xs text-slate-500">
-                        {Number(
-                          document.word_count || 0
-                        ).toLocaleString()}{" "}
-                        words
-                      </span>
-
-                    </div>
-
-                  )
-                )}
-
-              </div>
-            )}
-
-          </section>
-        )}
-
-
-        {/* ==================================================
-            EXAM CONFIGURATION
-        ================================================== */}
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+ <section className="rounded-2xl  bg-white p-5  sm:p-6">
 
           <div className="mb-6">
 
             <h2 className="text-lg font-bold text-slate-900">
-              2. Configure your exam
+              2. Select Prefrences
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Tell ExamForge what kind of exam
+              Tell what kind of exam
               you want to generate.
             </p>
 
@@ -945,67 +794,109 @@ function App() {
 
         </section>
 
-
-        {/* ==================================================
-            GENERATE BUTTON
-        ================================================== */}
-
-        <section className="py-8 text-center">
-
-          <button
-            type="button"
-            disabled={
-              !isFormValid ||
-              isUploading ||
-              loading
-            }
-            onClick={handleGenerateExam}
-            className="inline-flex min-w-60 items-center justify-center gap-3 rounded-xl bg-slate-900 px-6 py-3.5 font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-
-            {isUploading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-
-                Processing documents...
-              </>
-            ) : loading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-
-                Generating exam...
-              </>
-            ) : (
-              <>
-                Generate Exam
-
-                <span className="text-lg">
-                  →
-                </span>
-              </>
-            )}
-
-          </button>
-
-
-          {!files.length && (
-            <p className="mt-3 text-xs text-slate-400">
-              Add at least one PDF or DOCX to continue.
-            </p>
+            </div>
           )}
 
-          {files.length > 0 &&
-            !isDistributionValid && (
-              <p className="mt-3 text-xs text-red-500">
-                Fix the question distribution
-                before continuing.
-              </p>
-            )}
+
+          {/* UPLOAD PROGRESS */}
+
+          {isUploading && (
+            <div className="mt-5">
+
+              <div className="mb-2 flex items-center justify-between">
+
+                <span className="text-xs font-semibold text-slate-600">
+                  Uploading and processing...
+                </span>
+
+                <span className="text-xs font-bold text-indigo-600">
+                  {uploadProgress}%
+                </span>
+
+              </div>
+
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+
+                <div
+                  className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+                  style={{
+                    width: `${uploadProgress}%`,
+                  }}
+                />
+
+              </div>
+
+            </div>
+          )}
 
         </section>
 
 
         {/* ==================================================
+            PROCESSING RESULT
+        ================================================== */}
+
+        {uploadResult && (
+          <section className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5">
+
+            <div className="flex items-start gap-3">
+
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 font-bold text-green-600">
+                ✓
+              </div>
+
+              <div className="min-w-0">
+
+                <h3 className="font-bold text-green-900">
+                  Documents processed
+                </h3>
+
+                <p className="mt-1 text-sm text-green-700">
+                  {uploadResult.successful} of{" "}
+                  {uploadResult.total} documents
+                  were successfully processed.
+                </p>
+
+              </div>
+
+            </div>
+
+
+            {uploadResult.documents?.length > 0 && (
+              <div className="mt-4 space-y-2">
+
+                {uploadResult.documents.map(
+                  (document) => (
+
+                    <div
+                      key={document.id}
+                      className="flex items-center justify-between rounded-lg border border-green-200 bg-white/70 px-3 py-2"
+                    >
+
+                      <span className="truncate text-sm font-medium text-slate-700">
+                        {document.filename}
+                      </span>
+
+                      <span className="ml-3 shrink-0 text-xs text-slate-500">
+                        {Number(
+                          document.word_count || 0
+                        ).toLocaleString()}{" "}
+                        words
+                      </span>
+
+                    </div>
+
+                  )
+                )}
+
+              </div>
+            )}
+
+          </section>
+        )}
+
+
+          {/* ==================================================
             GENERATED EXAM
         ================================================== */}
 
@@ -1213,6 +1104,68 @@ function App() {
           </section>
         )}
 
+       
+
+        {/* ==================================================
+            GENERATE BUTTON
+        ================================================== */}
+
+        <section className="py-8 text-center">
+
+          <button
+            type="button"
+            disabled={
+              !isFormValid ||
+              isUploading ||
+              loading
+            }
+            onClick={handleGenerateExam}
+            className="inline-flex min-w-60 items-center justify-center gap-3 rounded-xl bg-slate-900 px-6 py-3.5 font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+
+            {isUploading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+
+                Processing documents...
+              </>
+            ) : loading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+
+                Generating exam...
+              </>
+            ) : (
+              <>
+                Generate Exam
+
+                <span className="text-lg">
+                  →
+                </span>
+              </>
+            )}
+
+          </button>
+
+
+          {!files.length && (
+            <p className="mt-3 text-xs text-slate-400">
+              Add at least one PDF or DOCX to continue.
+            </p>
+          )}
+
+          {files.length > 0 &&
+            !isDistributionValid && (
+              <p className="mt-3 text-xs text-red-500">
+                Fix the question distribution
+                before continuing.
+              </p>
+            )}
+
+        </section>
+
+
+    
       </main>
 
     </div>
