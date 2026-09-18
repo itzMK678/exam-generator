@@ -1,5 +1,5 @@
 from docx import Document
-from io import BytesIO
+from io import BytesIO #it help to treat byte store in memory as file object
 
 
 def extract_docx(file_bytes: bytes):
@@ -47,4 +47,4 @@ def extract_docx(file_bytes: bytes):
         ),
 
         "pages": pages,
-    }
+    } 

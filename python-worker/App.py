@@ -1,11 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-
 from extractors.pdf import extract_pdf
 from extractors.docx import extract_docx
 
 
 app = FastAPI(
-    title="ExamForge Document Worker",
+    title="Exam Document Worker",
     version="1.0.0"
 )
 
@@ -29,8 +28,9 @@ def health():
 async def extract_document(
     file: UploadFile = File(...)
 ):
+    # this function use file AND UPLOAD FILE TO GET FILE FROM FRONTEND AND EXTEACT FILE NAME AND SIZE
     filename = file.filename or ""
-
+#IT IS TELLING THE FILE NAME TO LOWER CASE TO CHECK IF IT IS PDF OR DOCX
     filename_lower = filename.lower()
 
     if not (
@@ -43,6 +43,7 @@ async def extract_document(
         )
 
     file_bytes = await file.read()
+    # saving the file bytes to check if the file is empty or not
 
     if not file_bytes:
         raise HTTPException(

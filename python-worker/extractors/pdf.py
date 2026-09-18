@@ -12,14 +12,15 @@ def extract_pdf(file_bytes: bytes):
     total_text = ""
 
     for index, page in enumerate(document):
+        # build in feature give us 2 things index and pdf page number  
         text = page.get_text("text")
-
+# get text is also build in to get text
         text = text.strip()
 
         word_count = len(
             text.split()
         )
-
+# split text in word
         pages.append({
             "page_number": index + 1,
             "content": text,
