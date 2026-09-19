@@ -30,7 +30,7 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "ExamForge API is running",
+    message: "API is running",
     version: "1.0.0",
   });
 });
@@ -49,9 +49,7 @@ app.use(
   "/api/exams",
    examRoutes
   );
-// --------------------------------------------------
-// Error handling
-// --------------------------------------------------
+
 
 app.use(errorMiddleware);
 

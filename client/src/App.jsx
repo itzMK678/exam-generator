@@ -6,7 +6,6 @@ const API_URL =
 
 function App() {
   const [files, setFiles] = useState([]);
-
   const [totalQuestions, setTotalQuestions] = useState(10);
   const [mcqs, setMcqs] = useState(4);
   const [shortQuestions, setShortQuestions] = useState(3);
@@ -24,9 +23,6 @@ function App() {
   const [generatedExam, setGeneratedExam] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // --------------------------------------------------
-  // VALIDATION
-  // --------------------------------------------------
 
   const questionSum =
     mcqs + shortQuestions + longQuestions;
@@ -56,8 +52,8 @@ function App() {
 
       const documentIds = documents
         .map((document) => document.id)
-        .filter(Boolean);
-
+        .filter(Boolean); 
+// remove false value
       if (documentIds.length === 0) {
         throw new Error(
           "Processed documents do not contain valid IDs."
@@ -83,6 +79,7 @@ function App() {
             shortCount: Number(shortQuestions),
 
             longCount: Number(longQuestions),
+            // soemtimes we get value in string it converts it in number
 
             difficulty,
 
@@ -155,20 +152,20 @@ function App() {
       );
     });
 
-    const unsupportedFiles = incomingFiles.filter((file) => {
-      const filename = file.name.toLowerCase();
+    // const unsupportedFiles = incomingFiles.filter((file) => {
+    //   const filename = file.name.toLowerCase();
 
-      return (
-        !filename.endsWith(".pdf") &&
-        !filename.endsWith(".docx")
-      );
-    });
+    //   return (
+    //     !filename.endsWith(".pdf") &&
+    //     !filename.endsWith(".docx")
+    //   );
+    // });
 
-    if (unsupportedFiles.length > 0) {
-      setError(
-        "Only PDF and DOCX files are supported."
-      );
-    }
+    // if (unsupportedFiles.length > 0) {
+    //   setError(
+    //     "Only PDF and DOCX files are supported."
+    //   );
+    // }
 
     setFiles((previousFiles) => {
       const existingFiles = new Set(
@@ -266,7 +263,7 @@ function App() {
       });
 
       const xhr = new XMLHttpRequest();
-
+// creating xhr request
       const uploadPromise = new Promise(
         (resolve, reject) => {
           xhr.open(

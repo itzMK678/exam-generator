@@ -12,4 +12,5 @@ export function errorMiddleware(err, req, res, next) {
     success: false,
     message: err.message || "Internal server error",
   });
-}
+} 
+// this middleware function is telling about size error

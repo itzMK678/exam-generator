@@ -5,7 +5,7 @@ import {
 } from "../utils/file.utils.js";
 
 const storage = multer.memoryStorage();
-
+// temporarely save file in RAM
 const fileFilter = (req, file, cb) => {
   const extension = getFileExtension(file.originalname);
 
