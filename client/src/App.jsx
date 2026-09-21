@@ -1,64 +1,139 @@
-
 import { useState } from "react";
 
+import AnswerPanel from "./components/AnswerPanel.jsx";
+
+import { useExam } from "./Context/ExamContent.jsx";
+
+
 const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000";
+
 
 function App() {
+
+  // ==================================================
+  // EXAM CONTEXT
+  // ==================================================
+
+  const {
+    generatedExam,
+    setGeneratedExam,
+    clearExam,
+    openAnswerPanel,
+  } = useExam();
+
+
+  // ==================================================
+  // FILE STATE
+  // ==================================================
+
   const [files, setFiles] = useState([]);
-  const [totalQuestions, setTotalQuestions] = useState(10);
+
+
+  // ==================================================
+  // EXAM PREFERENCES
+  // ==================================================
+
+  const [totalQuestions, setTotalQuestions] =
+    useState(10);
+
   const [mcqs, setMcqs] = useState(4);
-  const [shortQuestions, setShortQuestions] = useState(3);
-  const [longQuestions, setLongQuestions] = useState(3);
 
-  const [focusTopics, setFocusTopics] = useState("");
-  const [difficulty, setDifficulty] = useState("Mixed");
-  const [includeAnswers, setIncludeAnswers] = useState(true);
+  const [shortQuestions, setShortQuestions] =
+    useState(3);
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadResult, setUploadResult] = useState(null);
+  const [longQuestions, setLongQuestions] =
+    useState(3);
+
+  const [focusTopics, setFocusTopics] =
+    useState("");
+
+  const [difficulty, setDifficulty] =
+    useState("Mixed");
+
+  const [includeAnswers, setIncludeAnswers] =
+    useState(true);
+
+
+  // ==================================================
+  // UPLOAD STATE
+  // ==================================================
+
+  const [isUploading, setIsUploading] =
+    useState(false);
+
+  const [uploadProgress, setUploadProgress] =
+    useState(0);
+
+  const [uploadResult, setUploadResult] =
+    useState(null);
+
+
+  // ==================================================
+  // GENERAL STATE
+  // ==================================================
+
   const [error, setError] = useState("");
 
-  const [generatedExam, setGeneratedExam] = useState(null);
   const [loading, setLoading] = useState(false);
 
 
+  // ==================================================
+  // QUESTION VALIDATION
+  // ==================================================
+
   const questionSum =
-    mcqs + shortQuestions + longQuestions;
+    mcqs +
+    shortQuestions +
+    longQuestions;
+
 
   const isDistributionValid =
     questionSum === totalQuestions;
+
 
   const isFormValid =
     files.length > 0 &&
     totalQuestions > 0 &&
     isDistributionValid;
 
-  // --------------------------------------------------
+
+  // ==================================================
   // GENERATE EXAM
-  // --------------------------------------------------
+  // ==================================================
 
   const generateExam = async (documents) => {
+
     try {
+
       setLoading(true);
       setError("");
 
-      if (!documents || documents.length === 0) {
+
+      if (
+        !documents ||
+        documents.length === 0
+      ) {
         throw new Error(
           "No processed documents are available."
         );
       }
 
+
       const documentIds = documents
         .map((document) => document.id)
-        .filter(Boolean); 
-// remove false value
+        .filter(Boolean);
+
+
       if (documentIds.length === 0) {
+
         throw new Error(
           "Processed documents do not contain valid IDs."
         );
+
       }
+
 
       const response = await fetch(
         `${API_URL}/api/exams/generate`,
@@ -70,366 +145,566 @@ function App() {
           },
 
           body: JSON.stringify({
+
             documentIds,
 
-            totalQuestions: Number(totalQuestions),
+            totalQuestions:
+              Number(totalQuestions),
 
-            mcqCount: Number(mcqs),
+            mcqCount:
+              Number(mcqs),
 
-            shortCount: Number(shortQuestions),
+            shortCount:
+              Number(shortQuestions),
 
-            longCount: Number(longQuestions),
-            // soemtimes we get value in string it converts it in number
+            longCount:
+              Number(longQuestions),
 
             difficulty,
 
             focusTopics,
 
             includeAnswers,
+
           }),
         }
       );
 
+
       let data;
 
+
       try {
+
         data = await response.json();
+
       } catch {
+
         throw new Error(
           "Invalid response from exam-generation server."
         );
+
       }
+
 
       if (!response.ok) {
+
         throw new Error(
           data.message ||
-            data.error ||
-            "Failed to generate exam."
+          data.error ||
+          "Failed to generate exam."
         );
+
       }
 
+
       if (!data.data) {
+
         throw new Error(
           "The server did not return a generated exam."
         );
+
       }
 
+
+      // Save exam inside Context
       setGeneratedExam(data.data);
 
+
     } catch (error) {
+
       console.error(
         "Exam generation error:",
         error
       );
 
+
       setError(
         error.message ||
-          "Something went wrong while generating the exam."
+        "Something went wrong while generating the exam."
       );
+
 
     } finally {
+
       setLoading(false);
+
     }
+
   };
 
-  // --------------------------------------------------
+
+  // ==================================================
   // FILE HANDLING
-  // --------------------------------------------------
+  // ==================================================
 
   const handleFiles = (selectedFiles) => {
+
     setError("");
     setUploadResult(null);
-    setGeneratedExam(null);
+    clearExam();
 
-    const incomingFiles = Array.from(selectedFiles);
 
-    const supportedFiles = incomingFiles.filter((file) => {
-      const filename = file.name.toLowerCase();
+    const incomingFiles =
+      Array.from(selectedFiles);
 
-      return (
-        filename.endsWith(".pdf") ||
-        filename.endsWith(".docx")
-      );
-    });
 
-    // const unsupportedFiles = incomingFiles.filter((file) => {
-    //   const filename = file.name.toLowerCase();
+    const supportedFiles =
+      incomingFiles.filter((file) => {
 
-    //   return (
-    //     !filename.endsWith(".pdf") &&
-    //     !filename.endsWith(".docx")
-    //   );
-    // });
+        const filename =
+          file.name.toLowerCase();
 
-    // if (unsupportedFiles.length > 0) {
-    //   setError(
-    //     "Only PDF and DOCX files are supported."
-    //   );
-    // }
+
+        return (
+          filename.endsWith(".pdf") ||
+          filename.endsWith(".docx")
+        );
+
+      });
+
 
     setFiles((previousFiles) => {
-      const existingFiles = new Set(
-        previousFiles.map(
-          (file) => `${file.name}-${file.size}`
-        )
-      );
 
-      const newFiles = supportedFiles.filter(
-        (file) =>
-          !existingFiles.has(
-            `${file.name}-${file.size}`
+      const existingFiles =
+        new Set(
+          previousFiles.map(
+            (file) =>
+              `${file.name}-${file.size}`
           )
-      );
+        );
 
-      return [...previousFiles, ...newFiles];
+
+      const newFiles =
+        supportedFiles.filter(
+          (file) =>
+            !existingFiles.has(
+              `${file.name}-${file.size}`
+            )
+        );
+
+
+      return [
+        ...previousFiles,
+        ...newFiles,
+      ];
+
     });
+
   };
+
 
   const handleFileInput = (event) => {
+
     handleFiles(event.target.files);
 
-    // Allows selecting the same file again later.
+    // Allows selecting the same file again.
     event.target.value = "";
+
   };
+
 
   const handleDrop = (event) => {
+
     event.preventDefault();
 
-    handleFiles(event.dataTransfer.files);
+    handleFiles(
+      event.dataTransfer.files
+    );
+
   };
 
+
   const removeFile = (indexToRemove) => {
+
     setFiles((previousFiles) =>
       previousFiles.filter(
-        (_, index) => index !== indexToRemove
+        (_, index) =>
+          index !== indexToRemove
       )
     );
 
+
     setUploadResult(null);
-    setGeneratedExam(null);
+
+    clearExam();
+
   };
+
 
   const clearFiles = () => {
+
     setFiles([]);
+
     setUploadResult(null);
-    setGeneratedExam(null);
+
+    clearExam();
+
     setError("");
+
   };
 
-  // --------------------------------------------------
+
+  // ==================================================
   // HELPERS
-  // --------------------------------------------------
+  // ==================================================
 
   const formatFileSize = (bytes) => {
+
     if (bytes < 1024) {
       return `${bytes} B`;
     }
 
+
     if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
+
+      return `${(
+        bytes / 1024
+      ).toFixed(1)} KB`;
+
     }
 
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+    return `${(
+      bytes /
+      (1024 * 1024)
+    ).toFixed(1)} MB`;
+
   };
 
+
   const getFileType = (filename) => {
+
     return filename
       .toLowerCase()
       .endsWith(".pdf")
       ? "PDF"
       : "DOCX";
+
   };
 
-  // --------------------------------------------------
-  // UPLOAD TO BACKEND
-  // --------------------------------------------------
+
+  // ==================================================
+  // UPLOAD DOCUMENTS
+  // ==================================================
 
   const uploadDocuments = async () => {
+
     if (files.length === 0) {
-      setError("Please upload at least one document.");
-      return null;
-    }
 
-    setIsUploading(true);
-    setUploadProgress(0);
-    setError("");
-    setUploadResult(null);
-
-    try {
-      const formData = new FormData();
-
-      files.forEach((file) => {
-        formData.append("files", file);
-      });
-
-      const xhr = new XMLHttpRequest();
-// creating xhr request
-      const uploadPromise = new Promise(
-        (resolve, reject) => {
-          xhr.open(
-            "POST",
-            `${API_URL}/api/documents/upload`
-          );
-
-          xhr.upload.addEventListener(
-            "progress",
-            (event) => {
-              if (event.lengthComputable) {
-                const progress = Math.round(
-                  (event.loaded / event.total) * 100
-                );
-
-                setUploadProgress(progress);
-              }
-            }
-          );
-
-          xhr.addEventListener(
-            "load",
-            () => {
-              try {
-                const response = JSON.parse(
-                  xhr.responseText
-                );
-
-                if (
-                  xhr.status >= 200 &&
-                  xhr.status < 300
-                ) {
-                  resolve(response);
-                } else {
-                  reject(
-                    new Error(
-                      response.message ||
-                        response.error ||
-                        "Upload failed."
-                    )
-                  );
-                }
-              } catch {
-                reject(
-                  new Error(
-                    "Invalid response from server."
-                  )
-                );
-              }
-            }
-          );
-
-          xhr.addEventListener(
-            "error",
-            () => {
-              reject(
-                new Error(
-                  "Could not connect to the backend server."
-                )
-              );
-            }
-          );
-
-          xhr.addEventListener(
-            "abort",
-            () => {
-              reject(
-                new Error(
-                  "Upload was cancelled."
-                )
-              );
-            }
-          );
-
-          xhr.send(formData);
-        }
+      setError(
+        "Please upload at least one document."
       );
 
-      const result = await uploadPromise;
+      return null;
+
+    }
+
+
+    setIsUploading(true);
+
+    setUploadProgress(0);
+
+    setError("");
+
+    setUploadResult(null);
+
+
+    try {
+
+      const formData =
+        new FormData();
+
+
+      files.forEach((file) => {
+
+        formData.append(
+          "files",
+          file
+        );
+
+      });
+
+
+      const xhr =
+        new XMLHttpRequest();
+
+
+      const uploadPromise =
+        new Promise(
+          (resolve, reject) => {
+
+            xhr.open(
+              "POST",
+              `${API_URL}/api/documents/upload`
+            );
+
+
+            xhr.upload.addEventListener(
+              "progress",
+              (event) => {
+
+                if (
+                  event.lengthComputable
+                ) {
+
+                  const progress =
+                    Math.round(
+                      (event.loaded /
+                        event.total) *
+                        100
+                    );
+
+
+                  setUploadProgress(
+                    progress
+                  );
+
+                }
+
+              }
+            );
+
+
+            xhr.addEventListener(
+              "load",
+              () => {
+
+                try {
+
+                  const response =
+                    JSON.parse(
+                      xhr.responseText
+                    );
+
+
+                  if (
+                    xhr.status >= 200 &&
+                    xhr.status < 300
+                  ) {
+
+                    resolve(response);
+
+                  } else {
+
+                    reject(
+                      new Error(
+                        response.message ||
+                        response.error ||
+                        "Upload failed."
+                      )
+                    );
+
+                  }
+
+                } catch {
+
+                  reject(
+                    new Error(
+                      "Invalid response from server."
+                    )
+                  );
+
+                }
+
+              }
+            );
+
+
+            xhr.addEventListener(
+              "error",
+              () => {
+
+                reject(
+                  new Error(
+                    "Could not connect to the backend server."
+                  )
+                );
+
+              }
+            );
+
+
+            xhr.addEventListener(
+              "abort",
+              () => {
+
+                reject(
+                  new Error(
+                    "Upload was cancelled."
+                  )
+                );
+
+              }
+            );
+
+
+            xhr.send(formData);
+
+          }
+        );
+
+
+      const result =
+        await uploadPromise;
+
 
       setUploadProgress(100);
+
       setUploadResult(result);
 
-      // Important: return the upload result.
+
       return result;
 
+
     } catch (uploadError) {
+
       console.error(uploadError);
+
 
       setError(
         uploadError.message ||
-          "Something went wrong while uploading."
+        "Something went wrong while uploading."
       );
+
 
       return null;
 
+
     } finally {
+
       setIsUploading(false);
+
     }
+
   };
 
-  // --------------------------------------------------
-  // UPLOAD + GENERATE EXAM
-  // --------------------------------------------------
 
-  const handleGenerateExam = async () => {
-    if (!isFormValid) {
-      return;
-    }
+  // ==================================================
+  // UPLOAD + GENERATE
+  // ==================================================
 
-    setError("");
-    setGeneratedExam(null);
+  const handleGenerateExam =
+    async () => {
 
-    try {
-      // First upload and process documents.
-      const result = await uploadDocuments();
+      if (!isFormValid) {
+        return;
+      }
 
-     if (!result.documents || result.documents.length === 0) {
-  console.error("Upload result:", result);
 
-  const errorMessage =
-    result?.errors?.map((item) => {
-      return `${item.filename || "File"}: ${item.error}`;
-    }).join("\n") ||
-    result?.message ||
-    "No documents were successfully processed.";
+      setError("");
 
-  throw new Error(errorMessage);
-}
+      clearExam();
 
-      // Then generate the exam using processed documents.
-      await generateExam(result.documents);
 
-    } catch (error) {
-      console.error(error);
+      try {
 
-      setError(
-        error.message ||
+        // ----------------------------------------------
+        // STEP 1
+        // Upload and process documents
+        // ----------------------------------------------
+
+        const result =
+          await uploadDocuments();
+
+
+        if (
+          !result ||
+          !result.documents ||
+          result.documents.length === 0
+        ) {
+
+          console.error(
+            "Upload result:",
+            result
+          );
+
+
+          const errorMessage =
+            result?.errors
+              ?.map((item) => {
+
+                return `${
+                  item.filename ||
+                  "File"
+                }: ${item.error}`;
+
+              })
+              .join("\n") ||
+
+            result?.message ||
+
+            "No documents were successfully processed.";
+
+
+          throw new Error(
+            errorMessage
+          );
+
+        }
+
+
+        // ----------------------------------------------
+        // STEP 2
+        // Generate exam
+        // ----------------------------------------------
+
+        await generateExam(
+          result.documents
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+
+        setError(
+          error.message ||
           "Failed to generate exam."
-      );
-    }
-  };
+        );
+
+      }
+
+    };
+
+
+  // ==================================================
+  // UI
+  // ==================================================
 
   return (
+
     <div className="min-h-screen bg-slate-50 text-slate-900">
 
-     
-
       <main className="mx-auto max-w-4xl px-5 py-12 sm:px-6 sm:py-16">
-        {/* //Heading  */}
+
+
+        {/* ==================================================
+            HEADING
+        ================================================== */}
+
         <section className="mb-12 text-center">
 
           <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-slate-950 sm:text-6xl">
 
             Create exams
+
             <br />
 
             <span className="text-indigo-600">
-              from your documents and Pdf.
+
+              from your documents and PDF.
+
             </span>
 
           </h1>
 
+
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-500 sm:text-lg">
 
-            Upload your study material and create exams of different pattern using RAG.
+            Upload your study material and
+            create exams of different patterns
+            using RAG.
 
           </p>
 
@@ -441,31 +716,44 @@ function App() {
         ================================================== */}
 
         {error && (
+
           <div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
 
             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-sm font-bold text-red-600">
+
               !
+
             </div>
+
 
             <div>
 
               <p className="text-sm font-semibold text-red-800">
+
                 Something went wrong
+
               </p>
 
-              <p className="mt-1 text-sm text-red-600">
+
+              <p className="mt-1 whitespace-pre-line text-sm text-red-600">
+
                 {error}
+
               </p>
 
             </div>
 
           </div>
+
         )}
 
 
-        {/* to upload pdf */}
+        {/* ==================================================
+            UPLOAD DOCUMENTS
+        ================================================== */}
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+
 
           <div className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
 
@@ -474,32 +762,47 @@ function App() {
               <div className="flex items-center gap-3">
 
                 <h2 className="text-lg font-bold text-slate-900">
+
                   1. Upload study material
+
                 </h2>
 
+
                 {files.length > 0 && (
+
                   <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-600">
+
                     {files.length}
+
                   </span>
+
                 )}
 
               </div>
 
+
               <p className="mt-1 text-sm text-slate-500">
-                Upload as many PDF or Word documents
-                as you need.
+
+                Upload as many PDF or Word
+                documents as you need.
+
               </p>
 
             </div>
 
+
             {files.length > 0 && (
+
               <button
                 type="button"
                 onClick={clearFiles}
                 className="w-fit text-xs font-semibold text-slate-400 transition hover:text-red-500"
               >
+
                 Clear all
+
               </button>
+
             )}
 
           </div>
@@ -512,7 +815,7 @@ function App() {
               event.preventDefault()
             }
             onDrop={handleDrop}
-            className="group gap-3 flex min-h-30 cursor-pointer items-center justify-center rounded-xl border-2  border-slate-300 bg-slate-50 px-5 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40"
+            className="group flex min-h-30 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40"
           >
 
             <input
@@ -523,23 +826,38 @@ function App() {
               className="hidden"
             />
 
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-2xl text-indigo-600 transition group-hover:scale-105">
+
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-2xl text-indigo-600 transition group-hover:scale-105">
+
               ↑
+
             </div>
 
+
             <h3 className="font-semibold text-slate-900">
+
               Drop your documents here
+
             </h3>
 
-            <p className="mt-1 text-sm text-slate-500">
+
+            <p className="text-sm text-slate-500">
+
               or{" "}
+
               <span className="font-semibold text-indigo-600">
+
                 browse files
+
               </span>
+
             </p>
 
+
             <p className="mt-2 text-xs text-slate-400">
+
               PDF and DOCX • No fixed document limit
+
             </p>
 
           </label>
@@ -548,66 +866,146 @@ function App() {
           {/* FILE LIST */}
 
           {files.length > 0 && (
-            <div className=" mt-4 space-y-2">
 
-              {files.map((file, index) => (
+            <div className="mt-4 space-y-2">
 
-                <div
-                  key={`${file.name}-${file.size}-${index}`}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-green-50 p-3"
-                >
+              {files.map(
+                (file, index) => (
 
-                  <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    key={`${file.name}-${file.size}-${index}`}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-green-50 p-3"
+                  >
 
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[9px] font-extrabold ${
-                        getFileType(file.name) === "PDF"
-                          ? "bg-red-50 text-red-600"
-                          : "bg-blue-50 text-blue-600"
-                      }`}
+                    <div className="flex min-w-0 items-center gap-3">
+
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[9px] font-extrabold ${
+                          getFileType(file.name) ===
+                          "PDF"
+                            ? "bg-red-50 text-red-600"
+                            : "bg-blue-50 text-blue-600"
+                        }`}
+                      >
+
+                        {getFileType(
+                          file.name
+                        )}
+
+                      </div>
+
+
+                      <div className="min-w-0">
+
+                        <p className="truncate text-sm font-semibold text-slate-800">
+
+                          {file.name}
+
+                        </p>
+
+
+                        <p className="text-xs text-slate-400">
+
+                          {formatFileSize(
+                            file.size
+                          )}
+
+                        </p>
+
+                      </div>
+
+                    </div>
+
+
+                    <button
+                      type="button"
+                      disabled={
+                        isUploading ||
+                        loading
+                      }
+                      onClick={() =>
+                        removeFile(index)
+                      }
+                      className="shrink-0 text-xs font-bold text-slate-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {getFileType(file.name)}
-                    </div>
 
-                    <div className="min-w-0">
+                      X
 
-                      <p className="truncate text-sm font-semibold text-slate-800">
-                        {file.name}
-                      </p>
-
-                      <p className="text-xs text-slate-400">
-                        {formatFileSize(file.size)}
-                      </p>
-
-                    </div>
+                    </button>
 
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={isUploading || loading}
-                    onClick={() =>
-                      removeFile(index)
-                    }
-                    className="shrink-0 text-xs text-extrabold text-slate-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                   X
-                  </button>
+                )
+              )}
 
-                </div>
+            </div>
 
-              ))}
- <section className="rounded-2xl  bg-white p-5  sm:p-6">
+          )}
+
+
+          {/* UPLOAD PROGRESS */}
+
+          {isUploading && (
+
+            <div className="mt-5">
+
+              <div className="mb-2 flex items-center justify-between">
+
+                <span className="text-xs font-semibold text-slate-600">
+
+                  Uploading and processing...
+
+                </span>
+
+
+                <span className="text-xs font-bold text-indigo-600">
+
+                  {uploadProgress}%
+
+                </span>
+
+              </div>
+
+
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+
+                <div
+                  className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+                  style={{
+                    width:
+                      `${uploadProgress}%`,
+                  }}
+                />
+
+              </div>
+
+            </div>
+
+          )}
+
+        </section>
+
+
+        {/* ==================================================
+            PREFERENCES
+        ================================================== */}
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 
           <div className="mb-6">
 
             <h2 className="text-lg font-bold text-slate-900">
-              2. Select Prefrences
+
+              2. Select Preferences
+
             </h2>
 
+
             <p className="mt-1 text-sm text-slate-500">
-              Tell what kind of exam
+
+              Tell us what kind of exam
               you want to generate.
+
             </p>
 
           </div>
@@ -620,8 +1018,11 @@ function App() {
             <div>
 
               <label className="mb-2 block text-sm font-semibold text-slate-700">
+
                 Total questions
+
               </label>
+
 
               <input
                 type="number"
@@ -631,7 +1032,9 @@ function App() {
                   setTotalQuestions(
                     Math.max(
                       1,
-                      Number(event.target.value)
+                      Number(
+                        event.target.value
+                      )
                     )
                   )
                 }
@@ -644,8 +1047,11 @@ function App() {
             <div>
 
               <label className="mb-2 block text-sm font-semibold text-slate-700">
+
                 Difficulty
+
               </label>
+
 
               <select
                 value={difficulty}
@@ -657,10 +1063,21 @@ function App() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
               >
 
-                <option>Mixed</option>
-                <option>Easy</option>
-                <option>Medium</option>
-                <option>Hard</option>
+                <option>
+                  Mixed
+                </option>
+
+                <option>
+                  Easy
+                </option>
+
+                <option>
+                  Medium
+                </option>
+
+                <option>
+                  Hard
+                </option>
 
               </select>
 
@@ -680,12 +1097,14 @@ function App() {
               onChange={setMcqs}
             />
 
+
             <QuestionType
               title="Short Answer"
               description="Brief responses"
               value={shortQuestions}
               onChange={setShortQuestions}
             />
+
 
             <QuestionType
               title="Long Answer"
@@ -711,17 +1130,25 @@ function App() {
               Question distribution
             </span>
 
+
             <strong>
-              {questionSum} / {totalQuestions}
+              {questionSum} /{" "}
+              {totalQuestions}
             </strong>
 
           </div>
 
+
           {!isDistributionValid && (
+
             <p className="mt-2 text-xs text-red-600">
-              MCQ + Short + Long questions must
-              equal the total number of questions.
+
+              MCQ + Short + Long questions
+              must equal the total number
+              of questions.
+
             </p>
+
           )}
 
 
@@ -734,10 +1161,13 @@ function App() {
               Focus topics{" "}
 
               <span className="font-normal text-slate-400">
+
                 (optional)
+
               </span>
 
             </label>
+
 
             <textarea
               rows={4}
@@ -751,9 +1181,12 @@ function App() {
               className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"
             />
 
+
             <p className="mt-2 text-xs text-slate-400">
-              Leave empty to use content from all
-              uploaded documents.
+
+              Leave empty to use content
+              from all uploaded documents.
+
             </p>
 
           </div>
@@ -774,57 +1207,26 @@ function App() {
               className="mt-1 h-4 w-4 accent-indigo-600"
             />
 
+
             <div>
 
               <p className="text-sm font-semibold text-slate-800">
+
                 Generate answer key
+
               </p>
 
+
               <p className="mt-1 text-xs text-slate-500">
+
                 Include correct answers and
                 explanations with the exam.
+
               </p>
 
             </div>
 
           </label>
-
-        </section>
-
-            </div>
-          )}
-
-
-          {/* UPLOAD PROGRESS */}
-
-          {isUploading && (
-            <div className="mt-5">
-
-              <div className="mb-2 flex items-center justify-between">
-
-                <span className="text-xs font-semibold text-slate-600">
-                  Uploading and processing...
-                </span>
-
-                <span className="text-xs font-bold text-indigo-600">
-                  {uploadProgress}%
-                </span>
-
-              </div>
-
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-
-                <div
-                  className="h-full rounded-full bg-indigo-600 transition-all duration-300"
-                  style={{
-                    width: `${uploadProgress}%`,
-                  }}
-                />
-
-              </div>
-
-            </div>
-          )}
 
         </section>
 
@@ -834,24 +1236,35 @@ function App() {
         ================================================== */}
 
         {uploadResult && (
+
           <section className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5">
 
             <div className="flex items-start gap-3">
 
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 font-bold text-green-600">
+
                 ✓
+
               </div>
+
 
               <div className="min-w-0">
 
                 <h3 className="font-bold text-green-900">
+
                   Documents processed
+
                 </h3>
 
+
                 <p className="mt-1 text-sm text-green-700">
-                  {uploadResult.successful} of{" "}
-                  {uploadResult.total} documents
-                  were successfully processed.
+
+                  {uploadResult.successful}{" "}
+                  of{" "}
+                  {uploadResult.total}{" "}
+                  documents were
+                  successfully processed.
+
                 </p>
 
               </div>
@@ -859,7 +1272,9 @@ function App() {
             </div>
 
 
-            {uploadResult.documents?.length > 0 && (
+            {uploadResult.documents?.length >
+              0 && (
+
               <div className="mt-4 space-y-2">
 
                 {uploadResult.documents.map(
@@ -871,14 +1286,20 @@ function App() {
                     >
 
                       <span className="truncate text-sm font-medium text-slate-700">
+
                         {document.filename}
+
                       </span>
 
+
                       <span className="ml-3 shrink-0 text-xs text-slate-500">
+
                         {Number(
-                          document.word_count || 0
+                          document.word_count ||
+                          0
                         ).toLocaleString()}{" "}
                         words
+
                       </span>
 
                     </div>
@@ -887,43 +1308,57 @@ function App() {
                 )}
 
               </div>
+
             )}
 
           </section>
+
         )}
 
 
-          {/* ==================================================
+        {/* ==================================================
             GENERATED EXAM
         ================================================== */}
 
         {generatedExam && (
+
           <section className="mt-8 space-y-5">
+
 
             {/* EXAM HEADER */}
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
               <h2 className="text-2xl font-bold text-slate-900">
+
                 Generated Exam
+
               </h2>
 
+
               <p className="mt-2 text-sm text-slate-500">
+
                 {generatedExam.totalQuestions ||
                   generatedExam.questions?.length ||
                   0}{" "}
                 questions
+
               </p>
 
 
               {/* DOCUMENT DISTRIBUTION */}
 
-              {generatedExam.documents?.length > 0 && (
+              {generatedExam.documents?.length >
+                0 && (
+
                 <div className="mt-5">
 
                   <p className="mb-3 text-sm font-semibold text-slate-700">
+
                     Document distribution
+
                   </p>
+
 
                   <div className="space-y-2">
 
@@ -936,11 +1371,16 @@ function App() {
                         >
 
                           <span className="truncate text-sm font-medium">
+
                             {document.filename}
+
                           </span>
 
+
                           <span className="ml-3 shrink-0 text-xs font-semibold text-indigo-600">
+
                             {document.percentage}%
+
                           </span>
 
                         </div>
@@ -951,147 +1391,143 @@ function App() {
                   </div>
 
                 </div>
+
               )}
 
             </div>
 
 
-            {/* QUESTIONS */}
+            {/* ==================================================
+                QUESTIONS
+            ================================================== */}
 
             {generatedExam.questions?.map(
               (question, index) => (
 
                 <div
-                  key={question.id || index}
+                  key={
+                    question.id ||
+                    index
+                  }
                   className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
                 >
+
+
+                  {/* QUESTION HEADER */}
 
                   <div className="mb-4 flex items-center gap-3">
 
                     <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold uppercase text-indigo-600">
+
                       {question.type}
+
                     </span>
 
+
                     <span className="text-sm text-slate-400">
-                      Question {question.id || index + 1}
+
+                      Question{" "}
+                      {question.id ||
+                        index + 1}
+
                     </span>
 
                   </div>
 
 
+                  {/* QUESTION */}
+
                   <h3 className="text-lg font-semibold leading-7 text-slate-900">
+
                     {question.question}
+
                   </h3>
 
 
                   {/* MCQ OPTIONS */}
 
-                  {question.type === "mcq" &&
-                    question.options?.length > 0 && (
+                  {question.type ===
+                    "mcq" &&
+                    question.options?.length >
+                      0 && (
 
-                      <div className="mt-5 space-y-2">
+                    <div className="mt-5 space-y-2">
 
-                        {question.options.map(
-                          (option, optionIndex) => (
+                      {question.options.map(
+                        (
+                          option,
+                          optionIndex
+                        ) => (
 
-                            <div
-                              key={optionIndex}
-                              className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700"
-                            >
+                          <div
+                            key={
+                              optionIndex
+                            }
+                            className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700"
+                          >
 
-                              <span className="mr-2 font-bold">
-                                {String.fromCharCode(
-                                  65 + optionIndex
-                                )}
-                                .
-                              </span>
+                            <span className="mr-2 font-bold">
 
-                              {option}
+                              {String.fromCharCode(
+                                65 +
+                                  optionIndex
+                              )}
 
-                            </div>
+                              .
 
-                          )
-                        )}
+                            </span>
+
+
+                            {option}
+
+                          </div>
+
+                        )
+                      )}
+
+                    </div>
+
+                  )}
+
+
+                  {/* ==================================================
+                      VIEW ANSWER BUTTON
+                  ================================================== */}
+
+                  {includeAnswers &&
+                    (
+                      question.correctAnswer ||
+                      question.answer ||
+                      question.explanation ||
+                      question.sourcePages?.length >
+                        0
+                    ) && (
+
+                      <div className="mt-5 border-t border-slate-100 pt-5">
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openAnswerPanel(
+                              question
+                            )
+                          }
+                          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 hover:shadow-md"
+                        >
+
+                          <span>
+                            View Answer
+                          </span>
+
+                          <span className="text-base">
+                            →
+                          </span>
+
+                        </button>
 
                       </div>
 
                     )}
-
-
-                  {/* ANSWERS */}
-
-                  {includeAnswers && (
-                    <>
-
-                      {question.correctAnswer && (
-                        <div className="mt-5 rounded-xl bg-green-50 p-4">
-
-                          <p className="text-sm font-bold text-green-800">
-                            Answer
-                          </p>
-
-                          <p className="mt-1 text-sm text-green-700">
-                            {question.correctAnswer}
-                          </p>
-
-                        </div>
-                      )}
-
-
-                      {!question.correctAnswer &&
-                        question.answer && (
-
-                          <div className="mt-5 rounded-xl bg-green-50 p-4">
-
-                            <p className="text-sm font-bold text-green-800">
-                              Answer
-                            </p>
-
-                            <p className="mt-1 text-sm text-green-700">
-                              {question.answer}
-                            </p>
-
-                          </div>
-
-                        )}
-
-
-                      {/* EXPLANATION */}
-
-                      {question.explanation && (
-                        <div className="mt-3 rounded-xl bg-slate-50 p-4">
-
-                          <p className="text-sm font-bold text-slate-700">
-                            Explanation
-                          </p>
-
-                          <p className="mt-1 text-sm leading-6 text-slate-600">
-                            {question.explanation}
-                          </p>
-
-                        </div>
-                      )}
-
-                    </>
-                  )}
-
-
-                  {/* SOURCE PAGES */}
-
-                  {question.sourcePages?.length > 0 && (
-
-                    <p className="mt-4 text-xs text-slate-400">
-
-                      Source page
-                      {question.sourcePages.length > 1
-                        ? "s"
-                        : ""}:{" "}
-
-                      {question.sourcePages.join(", ")}
-
-                    </p>
-
-                  )}
 
                 </div>
 
@@ -1099,9 +1535,9 @@ function App() {
             )}
 
           </section>
+
         )}
 
-       
 
         {/* ==================================================
             GENERATE BUTTON
@@ -1116,63 +1552,95 @@ function App() {
               isUploading ||
               loading
             }
-            onClick={handleGenerateExam}
+            onClick={
+              handleGenerateExam
+            }
             className="inline-flex min-w-60 items-center justify-center gap-3 rounded-xl bg-slate-900 px-6 py-3.5 font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
 
             {isUploading ? (
+
               <>
+
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
 
                 Processing documents...
+
               </>
+
             ) : loading ? (
+
               <>
+
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
 
                 Generating exam...
+
               </>
+
             ) : (
+
               <>
+
                 Generate Exam
 
                 <span className="text-lg">
                   →
                 </span>
+
               </>
+
             )}
 
           </button>
 
 
           {!files.length && (
+
             <p className="mt-3 text-xs text-slate-400">
-              Add at least one PDF or DOCX to continue.
+
+              Add at least one PDF or
+              DOCX to continue.
+
             </p>
+
           )}
+
 
           {files.length > 0 &&
             !isDistributionValid && (
+
               <p className="mt-3 text-xs text-red-500">
+
                 Fix the question distribution
                 before continuing.
+
               </p>
+
             )}
 
         </section>
 
 
-    
       </main>
 
+
+      {/* ==================================================
+          ANSWER SIDE PANEL
+      ================================================== */}
+
+      <AnswerPanel />
+
     </div>
+
   );
+
 }
 
 
-/* ======================================================
-   QUESTION TYPE COMPONENT
-====================================================== */
+// ======================================================
+// QUESTION TYPE COMPONENT
+// ======================================================
 
 function QuestionType({
   title,
@@ -1180,20 +1648,28 @@ function QuestionType({
   value,
   onChange,
 }) {
+
   return (
+
     <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
 
       <div>
 
         <p className="text-sm font-semibold text-slate-800">
+
           {title}
+
         </p>
 
+
         <p className="mt-1 text-xs text-slate-400">
+
           {description}
+
         </p>
 
       </div>
+
 
       <input
         type="number"
@@ -1203,7 +1679,9 @@ function QuestionType({
           onChange(
             Math.max(
               0,
-              Number(event.target.value)
+              Number(
+                event.target.value
+              )
             )
           )
         }
@@ -1211,7 +1689,10 @@ function QuestionType({
       />
 
     </div>
+
   );
+
 }
+
 
 export default App;
