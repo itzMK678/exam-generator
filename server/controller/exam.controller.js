@@ -1,6 +1,4 @@
-import {
-  generateExam,
-} from "../services/exam.service.js";
+import {generateExam,} from "../services/exam.service.js";
 
 
 export async function generateExamController(

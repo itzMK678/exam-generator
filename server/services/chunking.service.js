@@ -97,6 +97,7 @@ export function chunkText(
  * Each page is chunked independently so that we preserve
  * page_number metadata for citations/debugging.
  */
+
 export function createDocumentChunks(pages) {
   const allChunks = [];
 

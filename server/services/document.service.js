@@ -3,24 +3,14 @@ import { randomUUID } from "crypto";
 import { supabase } from "./supabase.service.js";
 import { extractFile } from "./extraction.service.js";
 
-import {
-  createDocumentChunks,
-} from "./chunking.service.js";
+import {createDocumentChunks,} from "./chunking.service.js";
 
-import {
-  embedChunks,
-} from "./embedding.service.js";
+import {embedChunks,} from "./embedding.service.js";
 
-import {
-  saveDocumentChunks,
-  deleteDocumentChunks,
-} from "./vector.service.js";
+import {saveDocumentChunks,deleteDocumentChunks,} from "./vector.service.js";
 
 const BUCKET_NAME = "documents";
 
-/**
- * Process one uploaded document.
- */
 export async function processDocument(file) {
   const documentId = randomUUID();
 
