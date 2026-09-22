@@ -1,14 +1,12 @@
 import { useState } from "react";
 
 import AnswerPanel from "./components/AnswerPanel.jsx";
-
+import SummaryPanel from "./components/SummaryPanel.jsx";
 import { useExam } from "./Context/ExamContent.jsx";
-
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000";
-
 
 function App() {
 
@@ -77,6 +75,32 @@ function App() {
   const [error, setError] = useState("");
 
   const [loading, setLoading] = useState(false);
+
+
+  // ==================================================
+  // SUMMARY STATE
+  // ==================================================
+
+  const [selectedDocument, setSelectedDocument] =
+    useState(null);
+
+  const [isSummaryOpen, setIsSummaryOpen] =
+    useState(false);
+
+
+  // ==================================================
+  // SUMMARY FUNCTIONS
+  // ==================================================
+
+  const openSummary = (document) => {
+    setSelectedDocument(document);
+    setIsSummaryOpen(true);
+  };
+
+
+  const closeSummary = () => {
+    setIsSummaryOpen(false);
+  };
 
 
   // ==================================================
@@ -339,6 +363,9 @@ function App() {
     setUploadResult(null);
 
     clearExam();
+
+    setSelectedDocument(null);
+    setIsSummaryOpen(false);
 
     setError("");
 
@@ -704,7 +731,7 @@ function App() {
 
             Upload your study material and
             create exams of different patterns
-            using RAG.
+            using AI.
 
           </p>
 
@@ -1282,25 +1309,43 @@ function App() {
 
                     <div
                       key={document.id}
-                      className="flex items-center justify-between rounded-lg border border-green-200 bg-white/70 px-3 py-2"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-white/70 px-3 py-2"
                     >
 
-                      <span className="truncate text-sm font-medium text-slate-700">
+                      <div className="min-w-0">
 
-                        {document.filename}
+                        <p className="truncate text-sm font-medium text-slate-700">
 
-                      </span>
+                          {document.filename}
+
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+
+                          {Number(
+                            document.word_count ||
+                            0
+                          ).toLocaleString()}{" "}
+                          words
+
+                        </p>
+
+                      </div>
 
 
-                      <span className="ml-3 shrink-0 text-xs text-slate-500">
+                      {/* SUMMARY BUTTON */}
 
-                        {Number(
-                          document.word_count ||
-                          0
-                        ).toLocaleString()}{" "}
-                        words
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openSummary(document)
+                        }
+                        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                      >
 
-                      </span>
+                        View Summary
+
+                      </button>
 
                     </div>
 
@@ -1630,6 +1675,17 @@ function App() {
       ================================================== */}
 
       <AnswerPanel />
+
+
+      {/* ==================================================
+          SUMMARY SIDE PANEL
+      ================================================== */}
+
+      <SummaryPanel
+        document={selectedDocument}
+        isOpen={isSummaryOpen}
+        onClose={closeSummary}
+      />
 
     </div>
 
