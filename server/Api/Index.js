@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import healthRoutes from "../routes/health.route.js";
 import documentRoutes from "../routes/document.route.js";
 import examRoutes from "../routes/exam.route.js";
+import discussionRoutes from "../routes/discussion.route.js";
 
 import { errorMiddleware } from "../middleware/error.middleware.js";
 
@@ -44,7 +45,10 @@ app.use(
   "/api/documents",
   documentRoutes
 );
-
+app.use(
+  "/api/exams",
+  discussionRoutes
+);
 app.use(
   "/api/exams",
    examRoutes

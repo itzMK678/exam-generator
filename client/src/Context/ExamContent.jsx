@@ -7,25 +7,79 @@ export function ExamProvider({ children }) {
 
   const [selectedQuestion, setSelectedQuestion] = useState(null);
 
-  const [isAnswerPanelOpen, setIsAnswerPanelOpen] =
-    useState(false);
+  const [isAnswerPanelOpen, setIsAnswerPanelOpen] = useState(false);
 
-  // Open answer panel for a specific question
+  // ============================================================
+  // DISCUSSIONS
+  // Each question has its own conversation
+  // ============================================================
+
+  const [discussions, setDiscussions] = useState({});
+
+  // Create a stable key for each question
+  const getQuestionKey = (question) => {
+    return String(
+      question?.id ??
+      question?.question ??
+      ""
+    );
+  };
+
+  // Get messages for a particular question
+  const getDiscussionMessages = (question) => {
+    const key = getQuestionKey(question);
+
+    return discussions[key] || [];
+  };
+
+  // Add a message to a question's discussion
+  const addDiscussionMessage = (question, message) => {
+    const key = getQuestionKey(question);
+
+    setDiscussions((previous) => ({
+      ...previous,
+      [key]: [
+        ...(previous[key] || []),
+        message,
+      ],
+    }));
+  };
+
+  // Clear discussion for one question
+  const clearDiscussion = (question) => {
+    const key = getQuestionKey(question);
+
+    setDiscussions((previous) => {
+      const updated = { ...previous };
+
+      delete updated[key];
+
+      return updated;
+    });
+  };
+
+  // ============================================================
+  // ANSWER PANEL
+  // ============================================================
+
   const openAnswerPanel = (question) => {
     setSelectedQuestion(question);
     setIsAnswerPanelOpen(true);
   };
 
-  // Close answer panel
   const closeAnswerPanel = () => {
     setIsAnswerPanelOpen(false);
   };
 
-  // Completely clear exam data
+  // ============================================================
+  // CLEAR EXAM
+  // ============================================================
+
   const clearExam = () => {
     setGeneratedExam(null);
     setSelectedQuestion(null);
     setIsAnswerPanelOpen(false);
+    setDiscussions({});
   };
 
   return (
@@ -41,6 +95,11 @@ export function ExamProvider({ children }) {
 
         openAnswerPanel,
         closeAnswerPanel,
+
+        discussions,
+        getDiscussionMessages,
+        addDiscussionMessage,
+        clearDiscussion,
 
         clearExam,
       }}
