@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { env } from "../config/env.js";
 
@@ -7,6 +8,10 @@ const ai = new GoogleGenAI({
 
 /**
  * Generate an embedding for one piece of text.
+ *
+ * NOTE:
+ * ExamForge no longer uses embeddings/vector search.
+ * These functions can be removed later if nothing imports them.
  */
 export async function generateEmbedding(text) {
   if (!text || !text.trim()) {
@@ -50,9 +55,9 @@ export async function generateEmbedding(text) {
 /**
  * Generate embeddings for multiple chunks.
  *
- * We process each text separately because the current
- * Gemini response returned only one embedding when
- * multiple texts were sent together.
+ * NOTE:
+ * These functions are no longer needed if
+ * ExamForge has completely removed vectorization.
  */
 export async function generateEmbeddings(texts) {
   if (
@@ -86,18 +91,40 @@ export async function generateEmbeddings(texts) {
 
 /**
  * Generate structured JSON using Gemini.
+ *
+ * Retry strategy:
+ *
+ * Attempt 1
+ *     ↓
+ * 2-3 seconds
+ *
+ * Attempt 2
+ *     ↓
+ * 4-5 seconds
+ *
+ * Attempt 3
+ *     ↓
+ * 8-9 seconds
+ *
+ * Attempt 4
+ *     ↓
+ * Final failure
  */
 export async function generateStructuredContent({
   systemInstruction,
   prompt,
   responseSchema,
 }) {
-  const maxRetries = 3;
+  const maxRetries = 4;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  for (
+    let attempt = 1;
+    attempt <= maxRetries;
+    attempt++
+  ) {
     try {
       console.log(
-        `Gemini exam generation attempt ${attempt}/${maxRetries}...`
+        `Gemini generation attempt ${attempt}/${maxRetries}...`
       );
 
       const response =
@@ -125,16 +152,20 @@ export async function generateStructuredContent({
         );
       }
 
+      /**
+       * Convert Gemini's JSON string
+       * into a JavaScript object.
+       */
       try {
         return JSON.parse(text);
-      } catch (error) {
+      } catch (parseError) {
         console.error(
           "Gemini raw response:",
           text
         );
 
         throw new Error(
-          `Gemini returned invalid JSON: ${error.message}`
+          `Gemini returned invalid JSON: ${parseError.message}`
         );
       }
     } catch (error) {
@@ -145,26 +176,83 @@ export async function generateStructuredContent({
         error.message
       );
 
-      // Retry temporary server/unavailable errors
-      if (
-        (status === 503 || status === 429) &&
-        attempt < maxRetries
-      ) {
-        const delay =
-          attempt * 3000;
+      /**
+       * These errors are usually temporary
+       * and are safe to retry.
+       */
+      const isRetryable =
+        status === 429 ||
+        status === 500 ||
+        status === 502 ||
+        status === 503 ||
+        status === 504;
 
-        console.log(
-          `Retrying Gemini in ${delay / 1000} seconds...`
+      /**
+       * Do not retry errors such as:
+       *
+       * 400 → Bad request
+       * 401 → Invalid API key
+       * 403 → Permission denied
+       * 404 → Model not found
+       */
+      if (!isRetryable) {
+        console.error(
+          `Gemini error ${status} is not retryable.`
         );
 
-        await new Promise((resolve) =>
-          setTimeout(resolve, delay)
-        );
-
-        continue;
+        throw error;
       }
 
-      throw error;
+      /**
+       * We have used all attempts.
+       */
+      if (attempt === maxRetries) {
+        console.error(
+          "Gemini failed after all retry attempts."
+        );
+
+        throw error;
+      }
+
+      /**
+       * Exponential backoff:
+       *
+       * Attempt 1 → 2 seconds
+       * Attempt 2 → 4 seconds
+       * Attempt 3 → 8 seconds
+       */
+      const baseDelay =
+        2000 *
+        Math.pow(2, attempt - 1);
+
+      /**
+       * Add random jitter between
+       * 0 and 1 second.
+       */
+      const jitter =
+        Math.floor(
+          Math.random() * 1000
+        );
+
+      const delay =
+        baseDelay + jitter;
+
+      console.log(
+        `Retrying Gemini in ${(delay / 1000).toFixed(
+          1
+        )} seconds...`
+      );
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, delay)
+      );
     }
   }
+
+  /**
+   * This should never normally be reached.
+   */
+  throw new Error(
+    "Gemini generation failed."
+  );
 }
