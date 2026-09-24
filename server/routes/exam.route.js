@@ -1,5 +1,5 @@
 import express from "express";
-
+import {generateLimiter} from "../middleware/rateLimiter.middleware.js";
 import {
   generateExamController,
 } from "../controller/exam.controller.js";
@@ -10,6 +10,7 @@ const router =
 
 router.post(
   "/generate",
+  generateLimiter,
   generateExamController
 );
 

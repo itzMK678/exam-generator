@@ -1,61 +1,28 @@
-import {
-  summarizeDocument,
-} from "../services/summary.service.js";
+import { summarizeDocument } from "../services/summary.service.js";
+import { summarizeDocumentSchema } from "../validators/exam.validator.js";
 
-
-// ============================================================
-// SUMMARIZE DOCUMENT
-// ============================================================
-
-export async function summarizeDocumentController(
-  req,
-  res
-) {
+export async function summarizeDocumentController(req, res, next) {
   try {
-    const { documentId } = req.body;
+    const parseResult = summarizeDocumentSchema.safeParse(req.body);
 
-
-    // ============================================================
-    // VALIDATION
-    // ============================================================
-
-    if (!documentId) {
+    if (!parseResult.success) {
+      const errorMessage = parseResult.error.issues.map((i) => i.message).join(", ");
       return res.status(400).json({
         success: false,
-        message: "Document ID is required.",
+        message: errorMessage || "Document ID is required.",
       });
     }
 
+    const { documentId } = parseResult.data;
 
-    // ============================================================
-    // GENERATE SUMMARY
-    // ============================================================
-
-    const summary =
-      await summarizeDocument(documentId);
-
-
-    // ============================================================
-    // RESPONSE
-    // ============================================================
+    const summary = await summarizeDocument(documentId);
 
     return res.status(200).json({
       success: true,
       summary,
     });
-
   } catch (error) {
-
-    console.error(
-      "Summary error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        error.message ||
-        "Failed to generate summary.",
-    });
+    console.error("Summary error:", error.message);
+    next(error);
   }
 }

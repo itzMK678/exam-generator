@@ -1,125 +1,84 @@
 import { supabase } from "./supabase.service.js";
-
-import {
-  generateStructuredContent,
-} from "./gemini.service.js";
-
-import {
-  retrieveContext,
-} from "./rag.service.js";
-
-import {
-  allocateByWeight,
-} from "../utils/allocation.utils.js";
-
+import { generateStructuredContent } from "./gemini.service.js";
+import { retrieveContext } from "./rag.service.js";
+import { allocateByWeight } from "../utils/allocation.utils.js";
 
 /**
- * Get documents from database.
+ * Get documents from database and ensure they are ready.
  */
 async function getDocuments(documentIds) {
-  const { data, error } =
-    await supabase
-      .from("documents")
-      .select(`
-        id,
-        filename,
-        word_count,
-        page_count,
-        status
-      `)
-      .in("id", documentIds);
-
+  const { data, error } = await supabase
+    .from("documents")
+    .select(`
+      id,
+      filename,
+      word_count,
+      page_count,
+      status
+    `)
+    .in("id", documentIds);
 
   if (error) {
-    throw new Error(
-      `Failed to load documents: ${error.message}`
-    );
+    throw new Error(`Failed to load documents: ${error.message}`);
   }
-
 
   if (!data?.length) {
-    throw new Error(
-      "No documents found"
-    );
+    throw new Error("No documents found for the provided IDs.");
   }
 
-
-  const notReady =
-    data.filter(
-      (doc) => doc.status !== "ready"
-    );
-
+  const notReady = data.filter((doc) => doc.status !== "ready");
 
   if (notReady.length > 0) {
     throw new Error(
-      `Some documents are not ready: ${notReady
+      `Some documents are still processing or not ready: ${notReady
         .map((doc) => doc.filename)
         .join(", ")}`
     );
   }
 
-
   return data;
 }
-
 
 /**
  * Schema for generated questions.
  */
 const examResponseSchema = {
   type: "object",
-
   properties: {
     questions: {
       type: "array",
-
       items: {
         type: "object",
-
         properties: {
           type: {
             type: "string",
-
-            enum: [
-              "mcq",
-              "short",
-              "long",
-            ],
+            enum: ["mcq", "short", "long"],
           },
-
           question: {
             type: "string",
           },
-
           options: {
             type: "array",
-
             items: {
               type: "string",
             },
           },
-
           correctAnswer: {
             type: "string",
           },
-
           answer: {
             type: "string",
           },
-
           explanation: {
             type: "string",
           },
-
           sourcePages: {
             type: "array",
-
             items: {
               type: "integer",
             },
           },
         },
-
         required: [
           "type",
           "question",
@@ -132,15 +91,11 @@ const examResponseSchema = {
       },
     },
   },
-
-  required: [
-    "questions",
-  ],
+  required: ["questions"],
 };
 
-
 /**
- * Build the RAG generation prompt.
+ * Build the prompt with strict guidelines.
  */
 function buildPrompt({
   filename,
@@ -154,77 +109,46 @@ function buildPrompt({
   return `
 You are an expert educational exam generator.
 
-Your job is to generate exam questions ONLY from the
-provided source material.
+Your job is to generate exam questions ONLY from the provided source material.
 
 DOCUMENT:
 ${filename}
 
 REQUESTED QUESTION COUNTS:
+MCQ: ${mcqCount}
+SHORT ANSWER: ${shortCount}
+LONG ANSWER: ${longCount}
 
-MCQ:
-${mcqCount}
-
-SHORT:
-${shortCount}
-
-LONG:
-${longCount}
-
-DIFFICULTY:
+DIFFICULTY LEVEL:
 ${difficulty}
 
 FOCUS TOPICS:
-${focusTopics || "No specific focus topic. Cover the most important concepts."}
+${focusTopics || "Cover the most important concepts and core themes across the material."}
 
-
-IMPORTANT RULES:
-
-1. Use ONLY information contained in the SOURCE MATERIAL.
-
-2. Do not invent facts.
-
-3. Do not use outside knowledge.
-
-4. Every question must be answerable from the source material.
-
-5. Questions should test understanding, not just copying sentences.
-
-6. Avoid duplicate questions.
-
-7. Avoid questions that are nearly identical.
-
-8. MCQs must have exactly four options.
-
-9. MCQs must have exactly one correct answer.
-
-10. For MCQs:
-    - options must contain four choices
-    - correctAnswer must exactly match one option
-
-11. For short questions:
-    - options must be []
-    - correctAnswer must be ""
-    - answer should contain the expected answer
-
-12. For long questions:
-    - options must be []
-    - correctAnswer must be ""
-    - answer should contain a detailed expected answer
-
-13. sourcePages must contain the page numbers from the source
-    material that support the question.
-
-14. Make questions appropriate for the requested difficulty.
-
-15. Return exactly the requested number of questions.
+RULES:
+1. Use ONLY information contained in the SOURCE MATERIAL below. Do NOT hallucinate or extrapolate.
+2. Every question must be answerable from the text.
+3. Questions should test analytical understanding, not mere sentence copying.
+4. Avoid duplicate or repetitive questions.
+5. For MCQs:
+   - Provide exactly four distinct options in 'options'.
+   - 'correctAnswer' must match one of the four options exactly.
+6. For short answer questions:
+   - 'options' must be []
+   - 'correctAnswer' must be ""
+   - 'answer' should contain a clear, 1-3 sentence expected response.
+7. For long answer questions:
+   - 'options' must be []
+   - 'correctAnswer' must be ""
+   - 'answer' should contain a thorough, multi-point expected response.
+8. 'sourcePages' must contain an array of integer page numbers directly cited from the source material.
+9. Match the requested difficulty level (${difficulty}).
+10. Return exactly ${mcqCount + shortCount + longCount} questions in total.
 
 SOURCE MATERIAL:
-
 ${context}
 `;
 }
-
 
 /**
  * Generate questions for one document.
@@ -237,374 +161,157 @@ async function generateForDocument({
   difficulty,
   focusTopics,
 }) {
-  const totalQuestions =
-    mcqCount +
-    shortCount +
-    longCount;
-
+  const totalQuestions = mcqCount + shortCount + longCount;
 
   if (totalQuestions === 0) {
     return [];
   }
 
-
-  // --------------------------------------------------------
-  // Retrieval query
-  // --------------------------------------------------------
-
-  const retrievalQuery = `
-Generate an exam from the important concepts,
-definitions, mechanisms, facts, relationships,
-examples, processes and explanations in this document.
-
-Focus:
-${focusTopics || "all important topics"}
-
-Difficulty:
-${difficulty}
-`;
-
-
-  // --------------------------------------------------------
-  // RAG retrieval
-  // --------------------------------------------------------
-
-  const rag =
-    await retrieveContext({
-      query: retrievalQuery,
-
-      documentId: document.id,
-
-      topK: Math.min(
-        12,
-        Math.max(
-          6,
-          totalQuestions * 2
-        )
-      ),
-    });
-
+  // 1. Context retrieval with word capping and topic filtering
+  const rag = await retrieveContext({
+    documentId: document.id,
+    focusTopics,
+    topK: Math.min(24, Math.max(8, totalQuestions * 3)),
+  });
 
   if (!rag.context) {
-    throw new Error(
-      `No relevant content found for ${document.filename}`
-    );
+    throw new Error(`No extractable content found for document "${document.filename}"`);
   }
 
+  // 2. Build structured prompt
+  const prompt = buildPrompt({
+    filename: document.filename,
+    context: rag.context,
+    mcqCount,
+    shortCount,
+    longCount,
+    difficulty,
+    focusTopics,
+  });
 
-  // --------------------------------------------------------
-  // Gemini generation
-  // --------------------------------------------------------
+  // 3. Structured Gemini generation
+  const result = await generateStructuredContent({
+    systemInstruction:
+      "You are a rigorous educational exam creator. Output questions conforming strictly to the requested JSON schema.",
+    prompt,
+    responseSchema: examResponseSchema,
+  });
 
-  const prompt =
-    buildPrompt({
-      filename: document.filename,
+  const questions = result.questions || [];
 
-      context: rag.context,
-
-      mcqCount,
-
-      shortCount,
-
-      longCount,
-
-      difficulty,
-
-      focusTopics,
-    });
-
-
-  const result =
-    await generateStructuredContent({
-      systemInstruction:
-        "Generate accurate, source-grounded educational exam questions.",
-
-      prompt,
-
-      responseSchema:
-        examResponseSchema,
-    });
-
-
-  const questions =
-    result.questions || [];
-
-
-  if (
-    questions.length !==
-    totalQuestions
-  ) {
-    throw new Error(
-      `Gemini generated ${questions.length} questions for ${document.filename}, expected ${totalQuestions}`
-    );
-  }
-
-
-  return questions.map(
-    (question) => ({
-      ...question,
-
-      documentId:
-        document.id,
-
-      filename:
-        document.filename,
-    })
-  );
+  return questions.map((question) => ({
+    ...question,
+    options: Array.isArray(question.options) ? question.options : [],
+    sourcePages: Array.isArray(question.sourcePages)
+      ? question.sourcePages.filter((p) => typeof p === "number")
+      : [],
+    documentId: document.id,
+    filename: document.filename,
+  }));
 }
 
-
 /**
- * Generate complete exam.
+ * Generate complete exam with parallelized document processing.
  */
 export async function generateExam({
   documentIds,
-
   totalQuestions,
-
   mcqCount,
-
   shortCount,
-
   longCount,
-
   difficulty = "medium",
-
   focusTopics = "",
-
   includeAnswers = true,
 }) {
-  // --------------------------------------------------------
-  // Validation
-  // --------------------------------------------------------
-
-  if (
-    !Array.isArray(documentIds) ||
-    documentIds.length === 0
-  ) {
-    throw new Error(
-      "At least one document is required"
-    );
+  if (!Array.isArray(documentIds) || documentIds.length === 0) {
+    throw new Error("At least one document is required.");
   }
 
-
-  if (
-    totalQuestions <= 0
-  ) {
-    throw new Error(
-      "totalQuestions must be greater than zero"
-    );
+  if (totalQuestions <= 0) {
+    throw new Error("totalQuestions must be greater than zero.");
   }
 
-
-  const calculatedTotal =
-    mcqCount +
-    shortCount +
-    longCount;
-
-
-  if (
-    calculatedTotal !==
-    totalQuestions
-  ) {
-    throw new Error(
-      "MCQ + short + long counts must equal totalQuestions"
-    );
+  const calculatedTotal = mcqCount + shortCount + longCount;
+  if (calculatedTotal !== totalQuestions) {
+    throw new Error("The sum of MCQ, short, and long questions must equal totalQuestions.");
   }
 
+  // Load and validate documents
+  const documents = await getDocuments(documentIds);
 
-  // --------------------------------------------------------
-  // Load documents
-  // --------------------------------------------------------
+  // Allocate questions across documents using the largest remainder method
+  const mcqAllocation = allocateByWeight(documents, mcqCount, (doc) => doc.word_count);
+  const shortAllocation = allocateByWeight(documents, shortCount, (doc) => doc.word_count);
+  const longAllocation = allocateByWeight(documents, longCount, (doc) => doc.word_count);
 
-  const documents =
-    await getDocuments(
-      documentIds
-    );
-
-
-  // --------------------------------------------------------
-  // Allocate questions according
-  // to document word counts
-  // --------------------------------------------------------
-
- 
-
-
-  /*
-   * IMPORTANT:
-   *
-   * The above per-document allocation is not enough,
-   * because each document gets the whole total.
-   *
-   * So we calculate each question type across all
-   * documents below.
-   */
-
-  const mcqAllocation =
-    allocateByWeight(
-      documents,
-      mcqCount,
-      (doc) => doc.word_count
-    );
-
-
-  const shortAllocation =
-    allocateByWeight(
-      documents,
-      shortCount,
-      (doc) => doc.word_count
-    );
-
-
-  const longAllocation =
-    allocateByWeight(
-      documents,
-      longCount,
-      (doc) => doc.word_count
-    );
-
-
-  // --------------------------------------------------------
-  // Generate per-document exams
-  // --------------------------------------------------------
-
-  const allQuestions = [];
-
-
-  for (const document of documents) {
+  // Parallel generation across documents for high performance
+  const generationPromises = documents.map(async (document) => {
     const mcqCountForDoc =
-      mcqAllocation.find(
-        (item) =>
-          item.item.id === document.id
-      )?.count || 0;
-
+      mcqAllocation.find((item) => item.item.id === document.id)?.count || 0;
 
     const shortCountForDoc =
-      shortAllocation.find(
-        (item) =>
-          item.item.id === document.id
-      )?.count || 0;
-
+      shortAllocation.find((item) => item.item.id === document.id)?.count || 0;
 
     const longCountForDoc =
-      longAllocation.find(
-        (item) =>
-          item.item.id === document.id
-      )?.count || 0;
+      longAllocation.find((item) => item.item.id === document.id)?.count || 0;
 
+    if (mcqCountForDoc + shortCountForDoc + longCountForDoc === 0) {
+      return [];
+    }
 
-    const questions =
-      await generateForDocument({
-        document,
+    return await generateForDocument({
+      document,
+      mcqCount: mcqCountForDoc,
+      shortCount: shortCountForDoc,
+      longCount: longCountForDoc,
+      difficulty,
+      focusTopics,
+    });
+  });
 
-        mcqCount:
-          mcqCountForDoc,
+  const questionBatches = await Promise.all(generationPromises);
+  const allQuestions = questionBatches.flat();
 
-        shortCount:
-          shortCountForDoc,
+  // Clean and prepare final question list
+  const finalQuestions = allQuestions.map((question, index) => {
+    const cleaned = {
+      id: index + 1,
+      type: question.type,
+      question: question.question,
+      options: question.options || [],
+      documentId: question.documentId,
+      filename: question.filename,
+      sourcePages: question.sourcePages || [],
+    };
 
-        longCount:
-          longCountForDoc,
+    if (includeAnswers) {
+      cleaned.correctAnswer = question.correctAnswer || "";
+      cleaned.answer = question.answer || "";
+      cleaned.explanation = question.explanation || "";
+    }
 
-        difficulty,
+    return cleaned;
+  });
 
-        focusTopics,
-      });
-
-
-    allQuestions.push(
-      ...questions
-    );
-  }
-
-
-  // --------------------------------------------------------
-  // Remove answers if requested
-  // --------------------------------------------------------
-
-  const finalQuestions =
-    allQuestions.map(
-      (question, index) => {
-        const cleaned = {
-          id: index + 1,
-
-          type: question.type,
-
-          question:
-            question.question,
-
-          options:
-            question.options || [],
-
-          documentId:
-            question.documentId,
-
-          filename:
-            question.filename,
-
-          sourcePages:
-            question.sourcePages || [],
-        };
-
-
-        if (includeAnswers) {
-          cleaned.correctAnswer =
-            question.correctAnswer || "";
-
-          cleaned.answer =
-            question.answer || "";
-
-          cleaned.explanation =
-            question.explanation || "";
-        }
-
-
-        return cleaned;
-      }
-    );
-
+  const totalWordsAcrossDocs = documents.reduce(
+    (sum, d) => sum + Number(d.word_count || 0),
+    0
+  );
 
   return {
-    totalQuestions:
-      finalQuestions.length,
-
-    requestedQuestions:
-      totalQuestions,
-
+    totalQuestions: finalQuestions.length,
+    requestedQuestions: totalQuestions,
     difficulty,
-
     focusTopics,
-
-    documents: documents.map(
-      (doc) => ({
-        id: doc.id,
-
-        filename:
-          doc.filename,
-
-        wordCount:
-          doc.word_count,
-
-        percentage:
-          Number(
-            (
-              (doc.word_count /
-                documents.reduce(
-                  (sum, d) =>
-                    sum +
-                    Number(
-                      d.word_count || 0
-                    ),
-                  0
-                )) *
-              100
-            ).toFixed(2)
-          ),
-      })
-    ),
-
-    questions:
-      finalQuestions,
+    documents: documents.map((doc) => ({
+      id: doc.id,
+      filename: doc.filename,
+      wordCount: doc.word_count,
+      percentage:
+        totalWordsAcrossDocs > 0
+          ? Number(((doc.word_count / totalWordsAcrossDocs) * 100).toFixed(2))
+          : 0,
+    })),
+    questions: finalQuestions,
   };
 }
