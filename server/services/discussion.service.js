@@ -1,9 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
-import { env } from "../config/env.js";
-
-const ai = new GoogleGenAI({
-  apiKey: env.geminiApiKey,
-});
+import { generateTextContent } from "./gemini.service.js";
 
 export async function discussQuestion({
   question,
@@ -79,28 +74,11 @@ Important rules:
 
 
   // ============================================================
-  // GEMINI
+  // GEMINI (with retry & exponential backoff)
   // ============================================================
 
-  const response =
-    await ai.models.generateContent({
-      model: env.geminiGenerationModel,
-
-      contents: prompt,
-
-      config: {
-        temperature: 0.4,
-      },
-    });
-
-
-  const text = response.text;
-
-  if (!text) {
-    throw new Error(
-      "Gemini returned an empty response."
-    );
-  }
-
-  return text;
+  return await generateTextContent({
+    prompt,
+    temperature: 0.4,
+  });
 }

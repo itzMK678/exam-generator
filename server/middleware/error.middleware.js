@@ -23,8 +23,19 @@ export function errorMiddleware(err, req, res, next) {
   }
 
   const statusCode = err.status || err.statusCode || 500;
+  let errorMessage = err.message || "An unexpected internal server error occurred.";
+
+  if (typeof errorMessage === "string" && errorMessage.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(errorMessage);
+      if (parsed.error?.message) {
+        errorMessage = parsed.error.message;
+      }
+    } catch {}
+  }
+
   return res.status(statusCode).json({
     success: false,
-    message: err.message || "An unexpected internal server error occurred.",
+    message: errorMessage,
   });
 }

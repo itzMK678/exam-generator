@@ -1,10 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import { env } from "../config/env.js";
+import { generateTextContent } from "./gemini.service.js";
 import { supabase } from "./supabase.service.js";
-
-const ai = new GoogleGenAI({
-  apiKey: env.geminiApiKey,
-});
 
 
 // ============================================================
@@ -100,28 +95,11 @@ Summary requirements:
 
 
   // ============================================================
-  // GEMINI
+  // GEMINI (with retry & exponential backoff)
   // ============================================================
 
-  const response =
-    await ai.models.generateContent({
-      model: env.geminiGenerationModel,
-
-      contents: prompt,
-
-      config: {
-        temperature: 0.3,
-      },
-    });
-
-
-  const summary = response.text;
-
-  if (!summary) {
-    throw new Error(
-      "Gemini returned an empty summary."
-    );
-  }
-
-  return summary;
+  return await generateTextContent({
+    prompt,
+    temperature: 0.3,
+  });
 }

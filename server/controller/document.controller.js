@@ -1,3 +1,4 @@
+import fs from "fs";
 import { processDocument } from "../services/document.service.js";
 
 export async function uploadDocuments(
@@ -79,6 +80,13 @@ console.log(
     });
 
   } catch (error) {
+    if (req.files && Array.isArray(req.files)) {
+      for (const file of req.files) {
+        if (file.path) {
+          fs.promises.unlink(file.path).catch(() => {});
+        }
+      }
+    }
     next(error);
   }
 }

@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from extractors.pdf import extract_pdf
 from extractors.docx import extract_docx
@@ -69,10 +70,10 @@ async def extract_document(
 
     try:
         if filename_lower.endswith(".pdf"):
-            result = extract_pdf(file_bytes)
+            result = await asyncio.to_thread(extract_pdf, file_bytes)
             file_type = "pdf"
         else:
-            result = extract_docx(file_bytes)
+            result = await asyncio.to_thread(extract_docx, file_bytes)
             file_type = "docx"
 
         logger.info(f"Successfully extracted {filename}: {result['page_count']} pages, {result['word_count']} words.")

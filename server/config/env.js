@@ -34,7 +34,10 @@ export const env = {
   ),
 
   geminiGenerationModel:
-    process.env.GEMINI_GENERATION_MODEL || "gemini-3.8-flash",
+    process.env.GEMINI_GENERATION_MODEL || "gemini-2.5-flash",
+
+  geminiFallbackModel:
+    process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite",
 
   maxChunkWordCount: Number(process.env.MAX_CHUNK_WORD_COUNT || 500),
 

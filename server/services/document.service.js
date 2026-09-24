@@ -1,3 +1,4 @@
+import fs from "fs";
 import { randomUUID } from "crypto";
 
 import { supabase } from "./supabase.service.js";
@@ -5,32 +6,14 @@ import { extractFile } from "./extraction.service.js";
 import { createDocumentChunks } from "./chunking.service.js";
 import { saveDocumentChunks, deleteDocumentChunks } from "./vector.service.js";
 
-const BUCKET_NAME = "documents";
 const INSERT_BATCH_SIZE = 100;
 
 export async function processDocument(file) {
   const documentId = randomUUID();
-  const storagePath = `${documentId}/${file.originalname}`;
-
-  // ========================================================
-  // 1. Upload original file to Supabase Storage
-  // ========================================================
-  console.log(`[${file.originalname}] Uploading original file to storage...`);
-
-  const { error: storageError } = await supabase.storage
-    .from(BUCKET_NAME)
-    .upload(storagePath, file.buffer, {
-      contentType: file.mimetype,
-      upsert: false,
-    });
-
-  if (storageError) {
-    throw new Error(`Storage upload failed: ${storageError.message}`);
-  }
 
   try {
     // ======================================================
-    // 2. Extract text using Python worker
+    // 1. Extract text using Python worker (streamed from disk)
     // ======================================================
     console.log(`[${file.originalname}] Extracting text via Python worker...`);
 
@@ -45,7 +28,7 @@ export async function processDocument(file) {
     );
 
     // ======================================================
-    // 3. Insert document metadata
+    // 2. Insert document metadata (text-only, no binary storage)
     // ======================================================
     console.log(`[${file.originalname}] Saving document metadata...`);
 
@@ -56,7 +39,7 @@ export async function processDocument(file) {
         filename: file.originalname,
         file_type: extraction.file_type,
         mime_type: file.mimetype,
-        storage_path: storagePath,
+        storage_path: "text_only",
         file_size: file.size,
         page_count: extraction.page_count,
         word_count: extraction.word_count,
@@ -172,14 +155,16 @@ export async function processDocument(file) {
       console.error("Cleanup error (metadata):", cleanupError.message);
     }
 
-    try {
-      await supabase.storage
-        .from(BUCKET_NAME)
-        .remove([storagePath]);
-    } catch (cleanupError) {
-      console.error("Cleanup error (storage):", cleanupError.message);
-    }
-
     throw error;
+  } finally {
+    // Clean up temporary upload file from disk
+    if (file.path) {
+      try {
+        await fs.promises.unlink(file.path);
+        console.log(`[${file.originalname}] Removed temporary disk file.`);
+      } catch (cleanupErr) {
+        console.warn(`[${file.originalname}] Could not delete temp file ${file.path}:`, cleanupErr.message);
+      }
+    }
   }
 }

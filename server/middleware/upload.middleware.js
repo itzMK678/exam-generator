@@ -1,11 +1,22 @@
 import multer from "multer";
+import os from "os";
+import crypto from "crypto";
 import {
   ALLOWED_EXTENSIONS,
   getFileExtension,
   sanitizeFilename,
 } from "../utils/file.utils.js";
 
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, os.tmpdir());
+  },
+  filename: (req, file, cb) => {
+    const sanitized = sanitizeFilename(file.originalname);
+    const uniqueId = crypto.randomBytes(8).toString("hex");
+    cb(null, `examforge-${Date.now()}-${uniqueId}-${sanitized}`);
+  },
+});
 
 const fileFilter = (req, file, cb) => {
   // Sanitize filename on the incoming file object

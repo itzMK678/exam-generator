@@ -28,7 +28,10 @@ app.use(
       if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive in dev to avoid CORS blocking
+      if (process.env.NODE_ENV !== "production") {
+        return callback(null, true); // Permissive in dev to avoid CORS blocking
+      }
+      return callback(new Error(`CORS error: Origin ${origin} is not allowed.`));
     },
     credentials: true,
   })

@@ -1,3 +1,4 @@
+import fs from "fs";
 import axios from "axios";
 import FormData from "form-data";
 import { env } from "../config/env.js";
@@ -5,9 +6,13 @@ import { env } from "../config/env.js";
 export async function extractFile(file) {
   const form = new FormData();
 
+  const filePayload = file.path
+    ? fs.createReadStream(file.path)
+    : file.buffer;
+
   form.append(
     "file",
-    file.buffer,
+    filePayload,
     {
       filename: file.originalname,
       contentType: file.mimetype,
