@@ -1,59 +1,7 @@
-import { generateTextContent } from "./gemini.service.js";
-import { supabase } from "./supabase.service.js";
+import { generateTextContent, streamTextContent } from "./gemini.service.js";
+import { retrieveContext } from "./rag.service.js";
 
-
-// ============================================================
-// GET DOCUMENT CHUNKS
-// ============================================================
-
-async function getDocumentChunks(documentId) {
-  const { data, error } = await supabase
-    .from("document_chunks")
-    .select(
-      "document_id, page_number, chunk_index, content"
-    )
-    .eq("document_id", documentId)
-    .order("chunk_index", {
-      ascending: true,
-    });
-
-  if (error) {
-    throw new Error(
-      `Failed to get document chunks: ${error.message}`
-    );
-  }
-
-  return data || [];
-}
-
-
-// ============================================================
-// GENERATE DOCUMENT SUMMARY
-// ============================================================
-
-export async function summarizeDocument(
-  documentId
-) {
-  if (!documentId) {
-    throw new Error("Document ID is required.");
-  }
-
-  // Get all chunks belonging to this document
-  const chunks = await getDocumentChunks(
-    documentId
-  );
-
-  if (!chunks.length) {
-    throw new Error(
-      "No chunks found for this document."
-    );
-  }
-
-
-  // ============================================================
-  // COMBINE CHUNKS
-  // ============================================================
-
+function buildSummaryPrompt(chunks) {
   const documentText = chunks
     .map((chunk) => {
       return `
@@ -64,12 +12,7 @@ ${chunk.content}
     })
     .join("\n");
 
-
-  // ============================================================
-  // GEMINI PROMPT
-  // ============================================================
-
-  const prompt = `
+  return `
 You are a helpful study assistant inside ExamForge.
 
 Create a clear and useful summary of the following
@@ -92,14 +35,47 @@ Summary requirements:
 - Use headings and bullet points where useful.
 - Keep the summary concise but informative.
 `;
+}
 
+// ============================================================
+// GENERATE DOCUMENT SUMMARY
+// ============================================================
 
-  // ============================================================
-  // GEMINI (with retry & exponential backoff)
-  // ============================================================
+export async function summarizeDocument(documentId) {
+  if (!documentId) {
+    throw new Error("Document ID is required.");
+  }
+
+  const { chunks } = await retrieveContext({ documentId });
+
+  if (!chunks.length) {
+    throw new Error("No chunks found for this document.");
+  }
+
+  const prompt = buildSummaryPrompt(chunks);
 
   return await generateTextContent({
     prompt,
     temperature: 0.3,
   });
 }
+
+export async function* summarizeDocumentStream(documentId, signal) {
+  if (!documentId) {
+    throw new Error("Document ID is required.");
+  }
+
+  const { chunks } = await retrieveContext({ documentId });
+
+  if (!chunks.length) {
+    throw new Error("No chunks found for this document.");
+  }
+
+  const prompt = buildSummaryPrompt(chunks);
+
+  yield* streamTextContent({
+    prompt,
+    temperature: 0.3,
+    signal,
+  });
+}

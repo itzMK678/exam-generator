@@ -58,12 +58,19 @@ export function ExamProvider({ children }) {
     }
   }, [discussions]);
 
-  // Create a stable key for each question
+  // Create a stable, collision-free key for each question across exams
   const getQuestionKey = (question) => {
+    if (!question) return "";
+    if (question.uid) {
+      return `${question.uid}_${(question.question || "").slice(0, 24)}`;
+    }
+    if (question.documentId) {
+      return `${question.documentId}_${question.id}_${(question.question || "").slice(0, 24)}`;
+    }
     return String(
-      question?.id ??
-      question?.question ??
-      ""
+      question?.id
+        ? `${question.id}_${(question.question || "").slice(0, 24)}`
+        : question?.question ?? ""
     );
   };
 
@@ -85,6 +92,28 @@ export function ExamProvider({ children }) {
         message,
       ],
     }));
+  };
+
+  // Update the last message in a question's discussion (for streaming responses)
+  const updateLastDiscussionMessage = (question, updatedContent) => {
+    const key = getQuestionKey(question);
+
+    setDiscussions((previous) => {
+      const currentList = previous[key] || [];
+      if (!currentList.length) return previous;
+
+      const lastIndex = currentList.length - 1;
+      const updatedList = [...currentList];
+      updatedList[lastIndex] = {
+        ...updatedList[lastIndex],
+        content: updatedContent,
+      };
+
+      return {
+        ...previous,
+        [key]: updatedList,
+      };
+    });
   };
 
   // Clear discussion for one question
@@ -145,8 +174,10 @@ export function ExamProvider({ children }) {
         closeAnswerPanel,
 
         discussions,
+        getQuestionKey,
         getDiscussionMessages,
         addDiscussionMessage,
+        updateLastDiscussionMessage,
         clearDiscussion,
 
         clearExam,

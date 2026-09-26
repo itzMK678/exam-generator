@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.service.js";
 import { generateStructuredContent } from "./gemini.service.js";
 import { retrieveContext } from "./rag.service.js";
-import { allocateByWeight } from "../utils/allocation.utils.js";
+import { allocateQuestionTypes } from "../utils/allocation.utils.js";
 
 /**
  * Get documents from database and ensure they are ready.
@@ -240,20 +240,22 @@ export async function generateExam({
   const documents = await getDocuments(documentIds);
 
   // Allocate questions across documents using the largest remainder method
-  const mcqAllocation = allocateByWeight(documents, mcqCount, (doc) => doc.word_count);
-  const shortAllocation = allocateByWeight(documents, shortCount, (doc) => doc.word_count);
-  const longAllocation = allocateByWeight(documents, longCount, (doc) => doc.word_count);
+  const allocations = allocateQuestionTypes({
+    mcqCount,
+    shortCount,
+    longCount,
+    documents,
+  });
 
   // Parallel generation across documents for high performance
   const generationPromises = documents.map(async (document) => {
-    const mcqCountForDoc =
-      mcqAllocation.find((item) => item.item.id === document.id)?.count || 0;
+    const docAllocation = allocations.find(
+      (item) => item.documentId === document.id
+    );
 
-    const shortCountForDoc =
-      shortAllocation.find((item) => item.item.id === document.id)?.count || 0;
-
-    const longCountForDoc =
-      longAllocation.find((item) => item.item.id === document.id)?.count || 0;
+    const mcqCountForDoc = docAllocation?.mcqCount || 0;
+    const shortCountForDoc = docAllocation?.shortCount || 0;
+    const longCountForDoc = docAllocation?.longCount || 0;
 
     if (mcqCountForDoc + shortCountForDoc + longCountForDoc === 0) {
       return [];
@@ -276,6 +278,7 @@ export async function generateExam({
   const finalQuestions = allQuestions.map((question, index) => {
     const cleaned = {
       id: index + 1,
+      uid: `${question.documentId || "doc"}_q${index + 1}`,
       type: question.type,
       question: question.question,
       options: question.options || [],
@@ -303,10 +306,13 @@ export async function generateExam({
     requestedQuestions: totalQuestions,
     difficulty,
     focusTopics,
+    includeAnswers,
     documents: documents.map((doc) => ({
       id: doc.id,
       filename: doc.filename,
       wordCount: doc.word_count,
+      word_count: doc.word_count,
+      page_count: doc.page_count,
       percentage:
         totalWordsAcrossDocs > 0
           ? Number(((doc.word_count / totalWordsAcrossDocs) * 100).toFixed(2))

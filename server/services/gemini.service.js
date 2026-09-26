@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { env } from "../config/env.js";
 
@@ -7,90 +6,88 @@ const ai = new GoogleGenAI({
 });
 
 /**
- * Generate an embedding for one piece of text.
+ * ============================================================
+ * GEMINI CONCURRENCY LIMITER
+ * ============================================================
  *
- * NOTE:
- * ExamForge no longer uses embeddings/vector search.
- * These functions can be removed later if nothing imports them.
+ * Maximum number of Gemini API requests that can run
+ * simultaneously.
+ *
+ * Example:
+ * 5 requests arrive
+ *
+ * Request 1 → RUNNING
+ * Request 2 → RUNNING
+ * Request 3 → WAITING
+ * Request 4 → WAITING
+ * Request 5 → WAITING
+ *
+ * When one running request finishes, the next queued
+ * request starts.
  */
-export async function generateEmbedding(text) {
-  if (!text || !text.trim()) {
-    throw new Error(
-      "Cannot generate embedding for empty text"
-    );
-  }
+const MAX_CONCURRENT_GEMINI_REQUESTS =
+  env.maxConcurrentGeminiRequests || 2;
 
-  const response = await ai.models.embedContent({
-    model: env.geminiEmbeddingModel,
+let activeGeminiRequests = 0;
 
-    contents: text,
+const geminiQueue = [];
 
-    config: {
-      outputDimensionality:
-        env.geminiEmbeddingDimensions,
-    },
+/**
+ * Add a Gemini task to the queue.
+ *
+ * The task is a function that returns a Promise.
+ */
+function runWithGeminiLimit(task) {
+  return new Promise((resolve, reject) => {
+    geminiQueue.push({
+      task,
+      resolve,
+      reject,
+    });
+
+    processGeminiQueue();
   });
-
-  const embedding =
-    response.embeddings?.[0]?.values;
-
-  if (!embedding || embedding.length === 0) {
-    throw new Error(
-      "Gemini returned an empty embedding"
-    );
-  }
-
-  if (
-    embedding.length !==
-    env.geminiEmbeddingDimensions
-  ) {
-    throw new Error(
-      `Invalid embedding dimension. Expected ${env.geminiEmbeddingDimensions}, received ${embedding.length}`
-    );
-  }
-
-  return embedding;
 }
 
 /**
- * Generate embeddings for multiple chunks.
- *
- * NOTE:
- * These functions are no longer needed if
- * ExamForge has completely removed vectorization.
+ * Process queued Gemini requests while we have
+ * available concurrency slots.
  */
-export async function generateEmbeddings(texts) {
-  if (
-    !Array.isArray(texts) ||
-    texts.length === 0
+async function processGeminiQueue() {
+  while (
+    activeGeminiRequests <
+      MAX_CONCURRENT_GEMINI_REQUESTS &&
+    geminiQueue.length > 0
   ) {
-    return [];
-  }
+    const job = geminiQueue.shift();
 
-  const embeddings = [];
+    activeGeminiRequests++;
 
-  for (let i = 0; i < texts.length; i++) {
     console.log(
-      `Generating embedding ${i + 1}/${texts.length}`
+      `[Gemini Queue] Running: ${activeGeminiRequests}/${MAX_CONCURRENT_GEMINI_REQUESTS} | Waiting: ${geminiQueue.length}`
     );
 
-    const embedding =
-      await generateEmbedding(texts[i]);
+    Promise.resolve()
+      .then(() => job.task())
+      .then(job.resolve)
+      .catch(job.reject)
+      .finally(() => {
+        activeGeminiRequests--;
 
-    embeddings.push(embedding);
+        console.log(
+          `[Gemini Queue] Finished. Active: ${activeGeminiRequests} | Waiting: ${geminiQueue.length}`
+        );
+
+        processGeminiQueue();
+      });
   }
-
-  if (embeddings.length !== texts.length) {
-    throw new Error(
-      `Generated ${embeddings.length} embeddings for ${texts.length} texts`
-    );
-  }
-
-  return embeddings;
 }
 
+
 /**
- * Generate structured JSON using Gemini.
+ * ============================================================
+ * GEMINI CONTENT GENERATION WITH RETRY
+ * ============================================================
  *
  * Retry strategy:
  *
@@ -109,9 +106,18 @@ export async function generateEmbeddings(texts) {
  * Attempt 4
  *     ↓
  * Final failure
+ *
+ * The actual Gemini API request is also protected by
+ * the concurrency limiter above.
  */
+
 /**
- * Core resilient Gemini generator with exponential backoff & jitter.
+ * Core resilient Gemini generator with:
+ *
+ * 1. Concurrency limiting
+ * 2. Exponential backoff
+ * 3. Random jitter
+ * 4. Fallback model
  */
 export async function generateContentWithRetry({
   systemInstruction,
@@ -121,55 +127,107 @@ export async function generateContentWithRetry({
   responseMimeType,
 }) {
   const maxRetries = 4;
-  const config = { temperature };
+
+  const config = {
+    temperature,
+  };
 
   if (systemInstruction) {
     config.systemInstruction = systemInstruction;
   }
+
   if (responseMimeType) {
     config.responseMimeType = responseMimeType;
   }
+
   if (responseSchema) {
     config.responseSchema = responseSchema;
   }
 
   let currentModel = env.geminiGenerationModel;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // If the primary model failed due to high demand / 503, switch to fallback model
-    if (attempt >= 2 && env.geminiFallbackModel && currentModel !== env.geminiFallbackModel) {
-      console.warn(`[Gemini] Primary model busy/unavailable. Switching to fallback model: ${env.geminiFallbackModel}`);
+  for (
+    let attempt = 1;
+    attempt <= maxRetries;
+    attempt++
+  ) {
+    /**
+     * Switch to fallback model after the first failed
+     * attempt if a fallback model is configured.
+     */
+    if (
+      attempt >= 2 &&
+      env.geminiFallbackModel &&
+      currentModel !== env.geminiFallbackModel
+    ) {
+      console.warn(
+        `[Gemini] Primary model busy/unavailable. Switching to fallback model: ${env.geminiFallbackModel}`
+      );
+
       currentModel = env.geminiFallbackModel;
     }
 
     try {
-      console.log(`Gemini generation attempt ${attempt}/${maxRetries} using model [${currentModel}]...`);
+      console.log(
+        `Gemini generation attempt ${attempt}/${maxRetries} using model [${currentModel}]...`
+      );
 
-      const response = await ai.models.generateContent({
-        model: currentModel,
-        contents: prompt,
-        config,
-      });
+      /**
+       * IMPORTANT:
+       *
+       * The actual Gemini API call goes through
+       * the concurrency limiter.
+       *
+       * This prevents too many Gemini requests
+       * from running simultaneously.
+       */
+      const response = await runWithGeminiLimit(
+        () =>
+          ai.models.generateContent({
+            model: currentModel,
+            contents: prompt,
+            config,
+          })
+      );
 
       const text = response.text;
 
       if (!text) {
-        throw new Error("Gemini returned an empty response");
+        throw new Error(
+          "Gemini returned an empty response"
+        );
       }
 
       return text;
     } catch (error) {
       const rawStatus = error?.status;
-      const rawCode = error?.code || error?.error?.code;
-      const statusNum = Number(rawStatus || rawCode);
-      const statusStr = String(rawStatus || error?.error?.status || "").toUpperCase();
-      const errMsg = (error?.message || "").toLowerCase();
+
+      const rawCode =
+        error?.code ||
+        error?.error?.code;
+
+      const statusNum = Number(
+        rawStatus || rawCode
+      );
+
+      const statusStr = String(
+        rawStatus ||
+          error?.error?.status ||
+          ""
+      ).toUpperCase();
+
+      const errMsg = (
+        error?.message || ""
+      ).toLowerCase();
 
       console.error(
         `Gemini generation failed on attempt ${attempt} (${statusStr || rawCode || rawStatus}):`,
         error.message
       );
 
+      /**
+       * Determine whether the error is retryable.
+       */
       const isRetryable =
         statusNum === 429 ||
         statusNum === 500 ||
@@ -182,56 +240,149 @@ export async function generateContentWithRetry({
         errMsg.includes("429") ||
         errMsg.includes("unavailable") ||
         errMsg.includes("high demand") ||
-        errMsg.includes("resource has been exhausted");
+        errMsg.includes(
+          "resource has been exhausted"
+        );
 
+      /**
+       * Non-retryable error.
+       *
+       * Example:
+       * Invalid request
+       * Invalid schema
+       * Invalid API key
+       * Invalid model
+       */
       if (!isRetryable) {
-        console.error(`Gemini error ${statusStr || rawStatus} is not retryable.`);
+        console.error(
+          `Gemini error ${
+            statusStr ||
+            rawStatus
+          } is not retryable.`
+        );
+
         throw error;
       }
 
+      /**
+       * All retry attempts have been exhausted.
+       */
       if (attempt === maxRetries) {
-        console.error("Gemini failed after all retry attempts.");
-        throw new Error("This AI model is currently experiencing high demand. Please try again in a few moments.");
+        console.error(
+          "Gemini failed after all retry attempts."
+        );
+
+        throw new Error(
+          "This AI model is currently experiencing high demand. Please try again in a few moments."
+        );
       }
 
-      const baseDelay = 2000 * Math.pow(2, attempt - 1);
-      const jitter = Math.floor(Math.random() * 1000);
-      const delay = baseDelay + jitter;
+      /**
+       * Exponential backoff:
+       *
+       * Attempt 1 → 2-3 sec
+       * Attempt 2 → 4-5 sec
+       * Attempt 3 → 8-9 sec
+       */
+      const baseDelay =
+        2000 *
+        Math.pow(
+          2,
+          attempt - 1
+        );
 
-      console.log(`Retrying Gemini in ${(delay / 1000).toFixed(1)} seconds...`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      /**
+       * Add random jitter between
+       * 0 and 999 milliseconds.
+       */
+      const jitter =
+        Math.floor(
+          Math.random() * 1000
+        );
+
+      const delay =
+        baseDelay + jitter;
+
+      console.log(
+        `Retrying Gemini in ${(delay / 1000).toFixed(1)} seconds...`
+      );
+
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            delay
+          )
+      );
     }
   }
 
-  throw new Error("Gemini generation failed.");
+  throw new Error(
+    "Gemini generation failed."
+  );
 }
 
 /**
- * Generate structured JSON using Gemini with retry backoff.
+ * ============================================================
+ * STRUCTURED JSON GENERATION
+ * ============================================================
+ */
+
+/**
+ * Generate structured JSON using Gemini
+ * with retry and concurrency limiting.
  */
 export async function generateStructuredContent({
   systemInstruction,
   prompt,
   responseSchema,
 }) {
-  const text = await generateContentWithRetry({
-    systemInstruction,
-    prompt,
-    temperature: 0.2,
-    responseMimeType: "application/json",
-    responseSchema,
-  });
+  const text =
+    await generateContentWithRetry({
+      systemInstruction,
+      prompt,
+      temperature: 0.2,
+      responseMimeType:
+        "application/json",
+      responseSchema,
+    });
+
+  const cleanedText = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 
   try {
-    return JSON.parse(text);
+    return JSON.parse(cleanedText);
   } catch (parseError) {
-    console.error("Gemini raw response:", text);
-    throw new Error(`Gemini returned invalid JSON: ${parseError.message}`);
+    console.error(
+      "Gemini raw response:",
+      text
+    );
+
+    throw new Error(
+      `Gemini returned invalid JSON: ${parseError.message}`
+    );
   }
 }
 
 /**
- * Generate plain text using Gemini with retry backoff (for summaries, tutor discussions).
+ * ============================================================
+ * PLAIN TEXT GENERATION
+ * ============================================================
+ *
+ * Used for:
+ *
+ * - Document summaries
+ * - Tutor discussions
+ * - Explanations
+ * - Other plain-text AI responses
+ */
+
+/**
+ * Generate plain text using Gemini
+ * with retry and concurrency limiting.
  */
 export async function generateTextContent({
   systemInstruction,
@@ -244,3 +395,118 @@ export async function generateTextContent({
     temperature,
   });
 }
+
+/**
+ * ============================================================
+ * STREAMING TEXT GENERATION
+ * ============================================================
+ *
+ * Provides real-time token streaming using Gemini API.
+ * Protected by the concurrency limiter and initial-connection retry.
+ */
+export async function* streamTextContent({
+  systemInstruction,
+  prompt,
+  temperature = 0.4,
+  signal,
+}) {
+  // Acquire concurrency slot and hold it until stream is consumed or terminated
+  let releaseSlot;
+  const slotPromise = new Promise((resolve) => {
+    runWithGeminiLimit(() =>
+      new Promise((res) => {
+        releaseSlot = res;
+        resolve();
+      })
+    );
+  });
+  await slotPromise;
+
+  try {
+    let currentModel = env.geminiGenerationModel;
+    const maxRetries = 3;
+    let responseStream = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (
+        attempt >= 2 &&
+        env.geminiFallbackModel &&
+        currentModel !== env.geminiFallbackModel
+      ) {
+        console.warn(
+          `[Gemini Stream] Switching to fallback model: ${env.geminiFallbackModel}`
+        );
+        currentModel = env.geminiFallbackModel;
+      }
+
+      try {
+        console.log(
+          `[Gemini Stream] Initializing attempt ${attempt}/${maxRetries} using model [${currentModel}]...`
+        );
+
+        const config = { temperature };
+        if (systemInstruction) config.systemInstruction = systemInstruction;
+        if (signal) config.abortSignal = signal;
+
+        responseStream = await ai.models.generateContentStream({
+          model: currentModel,
+          contents: prompt,
+          config,
+        });
+
+        break;
+      } catch (error) {
+        const rawStatus = error?.status;
+        const rawCode = error?.code || error?.error?.code;
+        const statusNum = Number(rawStatus || rawCode);
+        const statusStr = String(
+          rawStatus || error?.error?.status || ""
+        ).toUpperCase();
+        const errMsg = (error?.message || "").toLowerCase();
+
+        console.error(
+          `[Gemini Stream] Connection failed on attempt ${attempt} (${statusStr || rawCode || rawStatus}):`,
+          error.message
+        );
+
+        const isRetryable =
+          statusNum === 429 ||
+          statusNum === 500 ||
+          statusNum === 502 ||
+          statusNum === 503 ||
+          statusNum === 504 ||
+          statusStr === "UNAVAILABLE" ||
+          statusStr === "RESOURCE_EXHAUSTED" ||
+          errMsg.includes("503") ||
+          errMsg.includes("429") ||
+          errMsg.includes("unavailable") ||
+          errMsg.includes("high demand") ||
+          errMsg.includes("resource has been exhausted");
+
+        if (!isRetryable || attempt === maxRetries) {
+          throw error;
+        }
+
+        const baseDelay = 1500 * Math.pow(2, attempt - 1);
+        const jitter = Math.floor(Math.random() * 500);
+        await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter));
+      }
+    }
+
+    if (!responseStream) {
+      throw new Error("Failed to initialize Gemini stream.");
+    }
+
+    for await (const chunk of responseStream) {
+      if (signal?.aborted) break;
+      const text = chunk.text;
+      if (text) {
+        yield text;
+      }
+    }
+  } finally {
+    if (releaseSlot) {
+      releaseSlot();
+    }
+  }
+}

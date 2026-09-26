@@ -1,12 +1,11 @@
 import express from "express";
-import {generateLimiter} from "../middleware/rateLimiter.middleware.js";
+import { generateLimiter } from "../middleware/rateLimiter.middleware.js";
 import {
   generateExamController,
+  getExamJobStatusController,
 } from "../controller/exam.controller.js";
 
-const router =
-  express.Router();
-
+const router = express.Router();
 
 router.post(
   "/generate",
@@ -14,5 +13,9 @@ router.post(
   generateExamController
 );
 
+router.get(
+  "/job/:jobId",
+  getExamJobStatusController
+);
 
 export default router;

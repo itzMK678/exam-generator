@@ -40,10 +40,16 @@ def extract_pdf(file_bytes: bytes):
                 total_text_parts.append(text)
 
         full_text = "\n".join(total_text_parts).strip()
+        total_words = len(full_text.split()) if full_text else 0
+
+        if total_words == 0:
+            raise ValueError(
+                "No selectable text found in this PDF. It appears to be a scanned or image-only document—please upload a PDF with selectable text or OCR enabled."
+            )
 
         return {
             "page_count": len(pages),
-            "word_count": len(full_text.split()),
+            "word_count": total_words,
             "character_count": len(full_text),
             "pages": pages,
         }

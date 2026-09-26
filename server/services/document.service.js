@@ -23,12 +23,31 @@ export async function processDocument(file) {
       throw new Error("Invalid extraction response from Python worker");
     }
 
+    if (!extraction.word_count || extraction.word_count <= 0) {
+      throw new Error(
+        "No readable text could be extracted from this document. If it is a scanned PDF, please upload an OCR-processed version."
+      );
+    }
+
     console.log(
       `[${file.originalname}] Extracted ${extraction.pages.length} pages, ${extraction.word_count} words`
     );
 
     // ======================================================
-    // 2. Insert document metadata (text-only, no binary storage)
+    // 2. Create text chunks & validate BEFORE database writes
+    // ======================================================
+    console.log(`[${file.originalname}] Creating text chunks...`);
+
+    const chunks = createDocumentChunks(extraction.pages);
+
+    console.log(`[${file.originalname}] Created ${chunks.length} chunks`);
+
+    if (chunks.length === 0) {
+      throw new Error("No text chunks could be created from the document.");
+    }
+
+    // ======================================================
+    // 3. Insert document metadata (text-only, no binary storage)
     // ======================================================
     console.log(`[${file.originalname}] Saving document metadata...`);
 
@@ -77,21 +96,7 @@ export async function processDocument(file) {
     }
 
     // ======================================================
-    // 5. Create text chunks
-    // ======================================================
-    console.log(`[${file.originalname}] Creating text chunks...`);
-
-    const chunks = createDocumentChunks(extraction.pages);
-
-    console.log(`[${file.originalname}] Created ${chunks.length} chunks`);
-
-    if (chunks.length === 0) {
-      throw new Error("No text chunks were created");
-    }
-
-    // ======================================================
-    // 6. Save chunks in Supabase
-    // (Bypassing redundant sequential embedding generation)
+    // 5. Save chunks in Supabase
     // ======================================================
     console.log(`[${file.originalname}] Saving chunks to database...`);
 

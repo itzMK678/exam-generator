@@ -25,29 +25,34 @@ console.log(
       });
     }
 
-    const results = [];
+    const CONCURRENCY_LIMIT = 3;
+    const results = new Array(files.length);
 
-   for (const file of files) {
-  try {
-    const document = await processDocument(file);
-
-    results.push({
-      success: true,
-      document,
-    });
-  } catch (error) {
-    console.error(
-      `Failed to process ${file.originalname}:`,
-      error
-    );
-
-    results.push({
-      success: false,
-      filename: file.originalname,
-      error: error.message,
-    });
-  }
-}
+    for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
+      const slice = files.slice(i, i + CONCURRENCY_LIMIT);
+      await Promise.all(
+        slice.map(async (file, offset) => {
+          const idx = i + offset;
+          try {
+            const document = await processDocument(file);
+            results[idx] = {
+              success: true,
+              document,
+            };
+          } catch (error) {
+            console.error(
+              `Failed to process ${file.originalname}:`,
+              error.message || error
+            );
+            results[idx] = {
+              success: false,
+              filename: file.originalname,
+              error: error.message,
+            };
+          }
+        })
+      );
+    }
     const successful =
       results.filter(
         (result) => result.success

@@ -38,13 +38,18 @@ export async function extractFile(file) {
     return response.data;
 
   } catch (error) {
+    const workerDetail =
+      error.response?.data?.detail ||
+      error.response?.data?.message ||
+      error.message;
+
     console.error(
       "Python extraction error:",
       error.response?.data || error.message
     );
 
     throw new Error(
-      `Document extraction failed for ${file.originalname}`
+      workerDetail || `Document extraction failed for ${file.originalname}`
     );
   }
 }

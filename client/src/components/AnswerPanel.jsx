@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useExam } from "../Context/ExamContent";
+import MarkdownRenderer from "./MarkdownRenderer.jsx";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
@@ -10,14 +11,27 @@ function AnswerPanel() {
     selectedQuestion,
     isAnswerPanelOpen,
     closeAnswerPanel,
+    getQuestionKey,
     getDiscussionMessages,
     addDiscussionMessage,
+    updateLastDiscussionMessage,
     clearDiscussion,
   } = useExam();
 
   const [userMessage, setUserMessage] = useState("");
-  const [isDiscussing, setIsDiscussing] = useState(false);
+  const [discussingByKey, setDiscussingByKey] = useState({});
+  const abortControllersRef = useRef({});
   const chatBottomRef = useRef(null);
+
+  const currentQuestionKey = selectedQuestion ? getQuestionKey(selectedQuestion) : "";
+  const isDiscussing = currentQuestionKey ? Boolean(discussingByKey[currentQuestionKey]) : false;
+
+  useEffect(() => {
+    const controllers = abortControllersRef.current;
+    return () => {
+      Object.values(controllers).forEach((ctrl) => ctrl?.abort());
+    };
+  }, []);
 
   // ============================================================
   // RESET INPUT WHEN QUESTION CHANGES
@@ -47,16 +61,34 @@ function AnswerPanel() {
       ? getDiscussionMessages(selectedQuestion)
       : [];
 
+  const handleClearChat = () => {
+    if (!selectedQuestion) return;
+    const key = getQuestionKey(selectedQuestion);
+    if (abortControllersRef.current[key]) {
+      abortControllersRef.current[key].abort();
+      delete abortControllersRef.current[key];
+    }
+    setDiscussingByKey((prev) => ({ ...prev, [key]: false }));
+    clearDiscussion(selectedQuestion);
+  };
+
   // ============================================================
-  // SEND DISCUSSION MESSAGE
+  // SEND DISCUSSION MESSAGE (LIVE SSE STREAMING)
   // ============================================================
   const sendMessage = async () => {
     const message = userMessage.trim();
-    if (!message || !selectedQuestion || isDiscussing) {
+    if (!message || !selectedQuestion) {
       return;
     }
 
-    const previousMessages = getDiscussionMessages(selectedQuestion);
+    const targetQuestion = selectedQuestion;
+    const questionKey = getQuestionKey(targetQuestion);
+
+    if (discussingByKey[questionKey]) {
+      return;
+    }
+
+    const previousMessages = getDiscussionMessages(targetQuestion);
 
     const newUserMessage = {
       role: "user",
@@ -68,48 +100,109 @@ function AnswerPanel() {
       newUserMessage,
     ];
 
-    addDiscussionMessage(selectedQuestion, newUserMessage);
+    addDiscussionMessage(targetQuestion, newUserMessage);
     setUserMessage("");
-    setIsDiscussing(true);
+
+    const controller = new AbortController();
+    abortControllersRef.current[questionKey] = controller;
+    setDiscussingByKey((prev) => ({ ...prev, [questionKey]: true }));
+
+    // Add placeholder assistant message that will be populated by incoming tokens
+    addDiscussionMessage(targetQuestion, {
+      role: "assistant",
+      content: "",
+    });
+
+    const targetAnswer =
+      targetQuestion?.correctAnswer ||
+      targetQuestion?.answer ||
+      "";
 
     try {
       const response = await fetch(
-        `${API_URL}/api/exams/discuss`,
+        `${API_URL}/api/exams/discuss/stream`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            question: selectedQuestion.question,
-            answer,
-            explanation: selectedQuestion.explanation || "",
+            question: targetQuestion.question,
+            answer: targetAnswer,
+            explanation: targetQuestion.explanation || "",
             messages: updatedMessages,
           }),
+          signal: controller.signal,
         }
       );
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to discuss question."
-        );
+        let errorMsg = "Failed to discuss question.";
+        try {
+          const errData = await response.json();
+          errorMsg = errData.message || errorMsg;
+        } catch {}
+        throw new Error(errorMsg);
       }
 
-      addDiscussionMessage(selectedQuestion, {
-        role: "assistant",
-        content: data.message,
-      });
+      if (!response.body) {
+        throw new Error("Streaming is not supported by your browser or empty response body.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const dataStr = trimmed.replace(/^data:\s*/, "");
+          if (dataStr === "[DONE]") {
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.text) {
+              accumulated += parsed.text;
+              updateLastDiscussionMessage(targetQuestion, accumulated);
+            } else if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+          } catch (jsonErr) {
+            // Ignore incomplete chunks or parse failures
+            if (jsonErr.message && !jsonErr.message.includes("JSON")) {
+              throw jsonErr;
+            }
+          }
+        }
+      }
+
+      if (!accumulated.trim()) {
+        updateLastDiscussionMessage(
+          targetQuestion,
+          "No response received from tutor. Please try again."
+        );
+      }
     } catch (error) {
+      if (error.name === "AbortError") return;
       console.error("Discussion error:", error);
-      addDiscussionMessage(selectedQuestion, {
-        role: "assistant",
-        content:
-          "Sorry, I had trouble generating a response. Please check that the server is online and try again.",
-      });
+      updateLastDiscussionMessage(
+        targetQuestion,
+        `Sorry, I had trouble generating a response: ${error.message || "Please check that the server is online and try again."}`
+      );
     } finally {
-      setIsDiscussing(false);
+      setDiscussingByKey((prev) => ({ ...prev, [questionKey]: false }));
+      delete abortControllersRef.current[questionKey];
     }
   };
 
@@ -126,7 +219,7 @@ function AnswerPanel() {
   };
 
   return (
-    <>
+    <div className="print:hidden">
       {/* ==================================================
           BACKDROP
       ================================================== */}
@@ -200,9 +293,9 @@ function AnswerPanel() {
                   <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
                     Correct Answer
                   </p>
-                  <p className="mt-2 text-sm font-semibold leading-relaxed text-emerald-900">
-                    {answer}
-                  </p>
+                  <div className="mt-2 text-sm font-semibold leading-relaxed text-emerald-900">
+                    <MarkdownRenderer content={answer} />
+                  </div>
                 </div>
               )}
 
@@ -212,9 +305,9 @@ function AnswerPanel() {
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
                     Detailed Explanation
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                    {selectedQuestion.explanation}
-                  </p>
+                  <div className="mt-2 text-slate-600">
+                    <MarkdownRenderer content={selectedQuestion.explanation} />
+                  </div>
                 </div>
               )}
 
@@ -251,7 +344,7 @@ function AnswerPanel() {
                   {discussionMessages.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => clearDiscussion(selectedQuestion)}
+                      onClick={handleClearChat}
                       className="text-xs font-medium text-slate-400 hover:text-red-500 transition"
                     >
                       Clear chat
@@ -276,10 +369,14 @@ function AnswerPanel() {
                           className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                             message.role === "user"
                               ? "bg-indigo-600 text-white shadow-sm"
-                              : "bg-slate-100 text-slate-850 border border-slate-200"
+                              : "bg-slate-100 text-slate-800 border border-slate-200"
                           }`}
                         >
-                          {message.content}
+                          {message.role === "user" ? (
+                            message.content
+                          ) : (
+                            <MarkdownRenderer content={message.content} />
+                          )}
                         </div>
                       </div>
                     ))}
@@ -322,7 +419,7 @@ function AnswerPanel() {
           )}
         </div>
       </aside>
-    </>
+    </div>
   );
 }
 

@@ -10,7 +10,7 @@ import summaryRoutes from "../routes/summary.routes.js";
 import discussionRoutes from "../routes/discussion.route.js";
 
 import { errorMiddleware } from "../middleware/error.middleware.js";
-import { uploadLimiter, generateLimiter } from "../middleware/rateLimiter.middleware.js"; 
+
 const app = express();
 
 // --------------------------------------------------

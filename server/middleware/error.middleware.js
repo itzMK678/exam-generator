@@ -1,5 +1,20 @@
+import fs from "fs";
+
 export function errorMiddleware(err, req, res, next) {
   console.error("API ERROR:", err);
+
+  // Clean up any temporary files written to disk before the error occurred
+  const filesToClean = Array.isArray(req.files)
+    ? req.files
+    : req.file
+      ? [req.file]
+      : [];
+
+  for (const file of filesToClean) {
+    if (file?.path) {
+      fs.promises.unlink(file.path).catch(() => {});
+    }
+  }
 
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({
