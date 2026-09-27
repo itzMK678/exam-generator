@@ -12,8 +12,11 @@ redis.on("error", (err) => {
   console.error("Redis error:", err.message || err);
 });
 
-await redis.connect();
-
-console.log("✅ Redis connected");
+try {
+  await redis.connect();
+  console.log("✅ Redis connected");
+} catch (err) {
+  console.warn("⚠️ Redis connection failed, falling back to local memory store:", err.message);
+}
 
 export default redis;

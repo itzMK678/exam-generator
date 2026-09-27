@@ -1,8 +1,6 @@
 import React from "react";
 
-/**
- * Parse inline markdown formatting: **bold**, *italic*, and `code`.
- */
+// it take whole response and divide it in meaningfull part and returns as heading and other thing
 function parseInline(text) {
   if (!text) return null;
 

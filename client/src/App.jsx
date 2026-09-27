@@ -445,9 +445,7 @@ function App() {
             HEADING
         ================================================== */}
         <section className="mb-12 text-center print:hidden">
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50/70 px-3.5 py-1 text-xs font-semibold text-indigo-700 mb-4">
-            <span>✨ Powered by Gemini AI</span>
-          </div>
+          
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-950 sm:text-6xl">
             Create exams <br />
             <span className="text-indigo-600">from your documents & PDFs</span>
@@ -606,7 +604,7 @@ function App() {
         </section>
 
         {/* ==================================================
-            STEP 2: PREFERENCES
+            STEP 2: SELECT EXAM PREFERENCES
         ================================================== */}
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:p-7 print:hidden">
           <div className="mb-6">
@@ -736,6 +734,9 @@ function App() {
             </div>
           </label>
         </section>
+
+       
+        
 
         {/* ==================================================
             PROCESSED DOCUMENTS / SUMMARY ACCESS

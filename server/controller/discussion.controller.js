@@ -70,17 +70,17 @@ export async function discussQuestionStreamController(req, res, next) {
       });
 
       for await (const token of tokenStream) {
-        if (req.writableEnded) break;
+        if (res.writableEnded) break;
         res.write(`data: ${JSON.stringify({ text: token })}\n\n`);
       }
 
-      if (!req.writableEnded) {
+      if (!res.writableEnded) {
         res.write("data: [DONE]\n\n");
         res.end();
       }
     } catch (streamError) {
       console.error("Discussion stream error:", streamError.message);
-      if (!req.writableEnded) {
+      if (!res.writableEnded) {
         res.write(
           `data: ${JSON.stringify({
             error:

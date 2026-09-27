@@ -59,17 +59,17 @@ export async function summarizeDocumentStreamController(req, res, next) {
       const tokenStream = summarizeDocumentStream(documentId, abortController.signal);
 
       for await (const token of tokenStream) {
-        if (req.writableEnded) break;
+        if (res.writableEnded) break;
         res.write(`data: ${JSON.stringify({ text: token })}\n\n`);
       }
 
-      if (!req.writableEnded) {
+      if (!res.writableEnded) {
         res.write("data: [DONE]\n\n");
         res.end();
       }
     } catch (streamError) {
       console.error("Summary stream error:", streamError.message);
-      if (!req.writableEnded) {
+      if (!res.writableEnded) {
         res.write(
           `data: ${JSON.stringify({
             error: streamError.message || "Failed to stream document summary.",

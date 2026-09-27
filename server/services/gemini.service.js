@@ -1,6 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
 import { env } from "../config/env.js";
-
+import crypto from "crypto";
+import redis from "../config/redis.js";
+const MAX_CONCURRENT_GEMINI_REQUESTS =
+  env.maxConcurrentGeminiRequests || 2;
+const REDIS_SEMAPHORE_KEY = "examforge:gemini:active_slots";
+const SLOT_TTL_MS = 60000;
 const ai = new GoogleGenAI({
   apiKey: env.geminiApiKey,
 });
@@ -25,65 +30,75 @@ const ai = new GoogleGenAI({
  * When one running request finishes, the next queued
  * request starts.
  */
-const MAX_CONCURRENT_GEMINI_REQUESTS =
-  env.maxConcurrentGeminiRequests || 2;
-
-let activeGeminiRequests = 0;
-
-const geminiQueue = [];
-
-/**
- * Add a Gemini task to the queue.
- *
- * The task is a function that returns a Promise.
- */
-function runWithGeminiLimit(task) {
-  return new Promise((resolve, reject) => {
-    geminiQueue.push({
-      task,
-      resolve,
-      reject,
-    });
-
-    processGeminiQueue();
-  });
-}
-
-/**
- * Process queued Gemini requests while we have
- * available concurrency slots.
- */
-async function processGeminiQueue() {
-  while (
-    activeGeminiRequests <
-      MAX_CONCURRENT_GEMINI_REQUESTS &&
-    geminiQueue.length > 0
-  ) {
-    const job = geminiQueue.shift();
-
-    activeGeminiRequests++;
-
-    console.log(
-      `[Gemini Queue] Running: ${activeGeminiRequests}/${MAX_CONCURRENT_GEMINI_REQUESTS} | Waiting: ${geminiQueue.length}`
-    );
-
-    Promise.resolve()
-      .then(() => job.task())
-      .then(job.resolve)
-      .catch(job.reject)
-      .finally(() => {
-        activeGeminiRequests--;
-
-        console.log(
-          `[Gemini Queue] Finished. Active: ${activeGeminiRequests} | Waiting: ${geminiQueue.length}`
-        );
-
-        processGeminiQueue();
+async function acquireGeminiSlot(maxWaitMs = 120000) {
+  const slotId = crypto.randomUUID();
+  const startTime = Date.now();
+  // Atomic Lua script:
+  // 1. Purge expired leases
+  // 2. Count active leases
+  // 3. If count < limit, register slotId with future expiry timestamp and return 1
+  // 4. Otherwise return 0 (queue is full)
+  const luaScript = `
+    redis.call("ZREMRANGEBYSCORE", KEYS[1], 0, ARGV[1])
+    local count = redis.call("ZCARD", KEYS[1])
+    if count < tonumber(ARGV[2]) then
+      redis.call("ZADD", KEYS[1], ARGV[3], ARGV[4])
+      return 1
+    else
+      return 0
+    end
+  `;
+  while (Date.now() - startTime < maxWaitMs) {
+    const now = Date.now();
+    const expiresAt = now + SLOT_TTL_MS;
+    try {
+      const acquired = await redis.eval(luaScript, {
+        keys: [REDIS_SEMAPHORE_KEY],
+        arguments: [
+          String(now),
+          String(MAX_CONCURRENT_GEMINI_REQUESTS),
+          String(expiresAt),
+          slotId,
+        ],
       });
+      if (acquired === 1) {
+        return slotId;
+      }
+    } catch (err) {
+      console.warn("[Gemini Redis Semaphore] Fallback on error:", err.message);
+      return slotId; // Fallback so requests aren't permanently blocked if Redis blips
+    }
+    // Wait ~250ms with jitter before retrying
+    await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 100));
+  }
+  throw new Error("Gemini is currently processing too many requests. Please try again shortly.");
+}
+/**
+ * Release the distributed concurrency slot.
+ */
+async function releaseGeminiSlot(slotId) {
+  if (!slotId) return;
+  try {
+    if (typeof redis.zRem === "function") {
+      await redis.zRem(REDIS_SEMAPHORE_KEY, slotId);
+    } else {
+      await redis.sendCommand(["ZREM", REDIS_SEMAPHORE_KEY, slotId]);
+    }
+  } catch (err) {
+    console.error("[Gemini Redis Semaphore] Failed to release slot:", err.message);
   }
 }
-
-
+/**
+ * Execute a task wrapped in the Redis distributed limiter.
+ */
+async function runWithGeminiLimit(task) {
+  const slotId = await acquireGeminiSlot();
+  try {
+    return await task();
+  } finally {
+    await releaseGeminiSlot(slotId);
+  }
+}
 /**
  * ============================================================
  * GEMINI CONTENT GENERATION WITH RETRY
@@ -410,17 +425,20 @@ export async function* streamTextContent({
   temperature = 0.4,
   signal,
 }) {
-  // Acquire concurrency slot and hold it until stream is consumed or terminated
-  let releaseSlot;
-  const slotPromise = new Promise((resolve) => {
-    runWithGeminiLimit(() =>
-      new Promise((res) => {
-        releaseSlot = res;
-        resolve();
-      })
-    );
-  });
-  await slotPromise;
+  // Acquire distributed concurrency slot in Redis
+  const slotId = await acquireGeminiSlot();
+
+  // Heartbeat to keep slot active in Redis if stream lasts > 20s
+  const heartbeat = setInterval(() => {
+    redis
+      .sendCommand([
+        "ZADD",
+        REDIS_SEMAPHORE_KEY,
+        String(Date.now() + SLOT_TTL_MS),
+        slotId,
+      ])
+      .catch(() => {});
+  }, 20000);
 
   try {
     let currentModel = env.geminiGenerationModel;
@@ -505,8 +523,7 @@ export async function* streamTextContent({
       }
     }
   } finally {
-    if (releaseSlot) {
-      releaseSlot();
-    }
+    clearInterval(heartbeat);
+    await releaseGeminiSlot(slotId);
   }
-}
+}
