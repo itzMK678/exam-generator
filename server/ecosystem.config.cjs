@@ -4,9 +4,8 @@ module.exports = {
       name: "exam-api",
       script: "./Api/Index.js",
 
-      // "max" automatically detects all CPU cores on your machine
-      // and spawns 1 worker process per core (e.g. 4, 8, or 16)
-      instances: "max",
+      // Running 1 instance prevents burning through free-tier API rate limits
+      instances: 1,
 
       // "cluster" enables PM2's built-in round-robin load balancing
       exec_mode: "cluster",
