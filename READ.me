@@ -1,0 +1,48 @@
+## Run ExamForge
+
+# 1. Frontend
+
+```bash
+npm run dev
+```
+
+# 2. Backend
+Run the backend using PM2:
+
+```bash
+pm2 start ecosystem.config.js
+```
+
+If the backend is already running and you changed `.env`:
+
+```bash
+pm2 restart exam-api --update-env
+```
+
+### 3. Python Worker
+
+Run the Python worker using Uvicorn:
+
+```bash
+python -m uvicorn App:app --reload --port 8000
+```
+
+---
+
+## ⚠️ Gemini API High Demand Error
+
+If you receive a **"High demand"**, **"overloaded"**, or similar Gemini API error, the selected Gemini model may currently be experiencing high demand.
+
+Change the model in the backend `.env` file:
+
+```env
+GEMINI_GENERATION_MODEL=YOUR_AVAILABLE_MODEL
+```
+
+After changing the model, restart the backend:
+
+```bash
+pm2 restart exam-api --update-env
+```
+
+Make sure the new model is available for your Gemini API key.
