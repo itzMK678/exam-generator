@@ -1,6 +1,7 @@
 import logging
 import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from extractors.pdf import extract_pdf
 from extractors.docx import extract_docx
 
@@ -13,6 +14,14 @@ app = FastAPI(
     title="ExamForge Document Worker",
     version="1.1.0",
     description="High-performance extraction microservice for PDF and DOCX educational documents"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

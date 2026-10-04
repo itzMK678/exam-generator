@@ -1,3 +1,9 @@
+// ============================================================
+// [COMMENTED OUT FOR VERCEL] PM2 CLUSTER CONFIGURATION
+// Vercel handles autoscaling and process management automatically.
+// PM2 is not used when deploying to serverless environments like Vercel.
+// ============================================================
+/*
 module.exports = {
   apps: [
     {
@@ -22,3 +28,5 @@ module.exports = {
     },
   ],
 };
+*/
+module.exports = {};

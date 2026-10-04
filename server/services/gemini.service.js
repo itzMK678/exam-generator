@@ -89,15 +89,20 @@ async function releaseGeminiSlot(slotId) {
   }
 }
 /**
- * Execute a task wrapped in the Redis distributed limiter.
+ * Execute a task. In Vercel serverless mode, we run directly
+ * without Redis semaphore blocking.
  */
 async function runWithGeminiLimit(task) {
+  return await task();
+  /*
+  // [COMMENTED OUT FOR VERCEL]
   const slotId = await acquireGeminiSlot();
   try {
     return await task();
   } finally {
     await releaseGeminiSlot(slotId);
   }
+  */
 }
 /**
  * ============================================================

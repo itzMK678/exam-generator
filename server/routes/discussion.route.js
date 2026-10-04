@@ -14,10 +14,15 @@ router.post(
   discussQuestionController
 );
 
+/*
+// ============================================================
+// [COMMENTED OUT FOR VERCEL] SSE DISCUSSION STREAMING
+// ============================================================
 router.post(
   "/discuss/stream",
   aiInteractionLimiter,
   discussQuestionStreamController
 );
+*/
 
 export default router;

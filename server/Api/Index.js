@@ -72,6 +72,10 @@ app.use(errorMiddleware);
 // Server
 // --------------------------------------------------
 
-app.listen(env.port, () => {
-  console.log(`🚀 ExamForge API running on http://localhost:${env.port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(env.port, () => {
+    console.log(`🚀 ExamForge API running on http://localhost:${env.port}`);
+  });
+}
+
+export default app;

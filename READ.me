@@ -1,48 +1,71 @@
-## Run ExamForge
+## Run ExamForge (Vercel & Local Guide)
 
-# 1. Frontend
-
-```bash
-npm run dev
-```
-
-# 2. Backend
-Run the backend using PM2:
-
-```bash
-pm2 start ecosystem.config.cjs
-```
-
-If the backend is already running and you changed `.env`:
-
-```bash
-pm2 restart exam-api --update-env
-```
-
-### 3. Python Worker
-
-Run the Python worker using Uvicorn:
-
-```bash
-python -m uvicorn App:app --reload --port 8000
-```
+> **Vercel Optimization Notice**: BullMQ/Redis background jobs, PM2 clustering, and long-lived SSE streaming have been safely commented out and replaced with standard synchronous and serverless-compatible JSON APIs.
 
 ---
 
-## ⚠️ Gemini API High Demand Error
+### Local Development
 
-If you receive a **"High demand"**, **"overloaded"**, or similar Gemini API error, the selected Gemini model may currently be experiencing high demand.
+#### 1. Frontend (`client`)
+```bash
+cd client
+npm run dev
+```
 
-Change the model in the backend `.env` file:
+#### 2. Backend (`server`)
+Run directly with Node or Nodemon (no PM2 or Redis required):
+```bash
+cd server
+npm run dev
+```
+*(Or `npm start` for production mode)*
+
+#### 3. Python Worker (`python-worker`)
+Run using Uvicorn:
+```bash
+cd python-worker
+py -m uvicorn App:app --reload --port 8000
+```
+*(or `python -m uvicorn App:app --reload --port 8000`)*
+
+---
+
+### Deploying to Vercel
+
+You can deploy the services to Vercel in 3 simple projects:
+
+#### A. Deploy Frontend (`client`)
+1. Import the repository in Vercel.
+2. Set **Root Directory** to `client`.
+3. Set **Environment Variables**:
+   - `VITE_API_URL`: URL of your deployed server (e.g. `https://your-server.vercel.app`)
+4. Deploy!
+
+#### B. Deploy Backend (`server`)
+1. Import repository in Vercel as a new project.
+2. Set **Root Directory** to `server`.
+3. In `server/vercel.json`, Vercel will automatically route requests to `Api/Index.js`.
+4. Set **Environment Variables**:
+   - `SUPABASE_URL`: Your Supabase URL
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase Service Role Key
+   - `GEMINI_API_KEY`: Your Google Gemini API Key
+   - `PYTHON_WORKER_URL`: URL of your deployed Python worker (e.g. `https://your-worker.vercel.app`)
+   - `GEMINI_GENERATION_MODEL`: (Optional, default `gemini-flash-lite-latest`)
+   - `GEMINI_FALLBACK_MODEL`: (Optional, default `gemini-2.5-flash`)
+5. Deploy!
+
+#### C. Deploy Python Worker (`python-worker`)
+1. Import repository in Vercel as a new project.
+2. Set **Root Directory** to `python-worker`.
+3. Vercel detects `requirements.txt` and `api/index.py` with `@vercel/python`.
+4. Deploy!
+
+---
+
+## ⚠️ Gemini Model Selection
+
+If you receive a **"High demand"** or **"overloaded"** error from the Gemini API, adjust the model in `server/.env` or Vercel environment variables:
 
 ```env
-GEMINI_GENERATION_MODEL=YOUR_AVAILABLE_MODEL
+GEMINI_GENERATION_MODEL=gemini-2.5-flash
 ```
-
-After changing the model, restart the backend:
-
-```bash
-pm2 restart exam-api --update-env
-```
-
-Make sure the new model is available for your Gemini API key.

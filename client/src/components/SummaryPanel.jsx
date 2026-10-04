@@ -50,77 +50,32 @@ function SummaryPanel({
     setErrorByDoc((prev) => ({ ...prev, [docId]: "" }));
     setSummaryCache((prev) => ({ ...prev, [docId]: "" }));
 
+    // ============================================================
+    // STANDARD JSON SUMMARY (FOR VERCEL COMPATIBILITY)
+    // Non-streaming POST request compatible with standard serverless endpoints
+    // ============================================================
     try {
-      const response = await fetch(
-        `${API_URL}/api/documents/summarize/stream`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            documentId: docId,
-          }),
-          signal: controller.signal,
-        }
-      );
+      const response = await fetch(`${API_URL}/api/documents/summarize`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          documentId: docId,
+        }),
+        signal: controller.signal,
+      });
 
-      if (!response.ok) {
-        let errorMsg = "Failed to generate summary.";
-        try {
-          const errData = await response.json();
-          errorMsg = errData.message || errorMsg;
-        } catch {}
-        throw new Error(errorMsg);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to generate summary.");
       }
 
-      if (!response.body) {
-        throw new Error("Streaming is not supported by your browser or empty response.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const dataStr = trimmed.replace(/^data:\s*/, "");
-          if (dataStr === "[DONE]") {
-            break;
-          }
-
-          try {
-            const parsed = JSON.parse(dataStr);
-            if (parsed.text) {
-              accumulated += parsed.text;
-              setSummaryCache((prev) => ({
-                ...prev,
-                [docId]: accumulated,
-              }));
-            } else if (parsed.error) {
-              throw new Error(parsed.error);
-            }
-          } catch (jsonErr) {
-            if (jsonErr.message && !jsonErr.message.includes("JSON")) {
-              throw jsonErr;
-            }
-          }
-        }
-      }
-
-      if (!accumulated.trim()) {
-        throw new Error("Empty summary received from server.");
-      }
+      setSummaryCache((prev) => ({
+        ...prev,
+        [docId]: data.summary || "",
+      }));
     } catch (err) {
       if (err.name === "AbortError") return;
       console.error("Summary error:", err);
@@ -134,6 +89,95 @@ function SummaryPanel({
       setLoadingByDoc((prev) => ({ ...prev, [docId]: false }));
       delete abortControllersRef.current[docId];
     }
+
+    // ============================================================
+    // [COMMENTED OUT FOR VERCEL] LIVE SSE STREAMING
+    // Uncomment if hosting in an environment with full long-lived SSE streaming support
+    // ============================================================
+    // try {
+    //   const response = await fetch(
+    //     `${API_URL}/api/documents/summarize/stream`,
+    //     {
+    //       method: "POST",
+    //       headers: {
+    //         "Content-Type": "application/json",
+    //       },
+    //       body: JSON.stringify({
+    //         documentId: docId,
+    //       }),
+    //       signal: controller.signal,
+    //     }
+    //   );
+    //
+    //   if (!response.ok) {
+    //     let errorMsg = "Failed to generate summary.";
+    //     try {
+    //       const errData = await response.json();
+    //       errorMsg = errData.message || errorMsg;
+    //     } catch {}
+    //     throw new Error(errorMsg);
+    //   }
+    //
+    //   if (!response.body) {
+    //     throw new Error("Streaming is not supported by your browser or empty response.");
+    //   }
+    //
+    //   const reader = response.body.getReader();
+    //   const decoder = new TextDecoder();
+    //   let buffer = "";
+    //   let accumulated = "";
+    //
+    //   while (true) {
+    //     const { done, value } = await reader.read();
+    //     if (done) break;
+    //
+    //     buffer += decoder.decode(value, { stream: true });
+    //     const lines = buffer.split("\n");
+    //     buffer = lines.pop() || "";
+    //
+    //     for (const line of lines) {
+    //       const trimmed = line.trim();
+    //       if (!trimmed.startsWith("data:")) continue;
+    //       const dataStr = trimmed.replace(/^data:\\s*/, "");
+    //       if (dataStr === "[DONE]") {
+    //         break;
+    //       }
+    //
+    //       try {
+    //         const parsed = JSON.parse(dataStr);
+    //         if (parsed.text) {
+    //           accumulated += parsed.text;
+    //           setSummaryCache((prev) => ({
+    //             ...prev,
+    //             [docId]: accumulated,
+    //           }));
+    //         } else if (parsed.error) {
+    //           throw new Error(parsed.error);
+    //         }
+    //       } catch (jsonErr) {
+    //         if (jsonErr.message && !jsonErr.message.includes("JSON")) {
+    //           throw jsonErr;
+    //         }
+    //       }
+    //     }
+    //   }
+    //
+    //   if (!accumulated.trim()) {
+    //     throw new Error("Empty summary received from server.");
+    //   }
+    // } catch (err) {
+    //   if (err.name === "AbortError") return;
+    //   console.error("Summary error:", err);
+    //   setErrorByDoc((prev) => ({
+    //     ...prev,
+    //     [docId]:
+    //       err.message ||
+    //       "Failed to generate summary. Please ensure the server is running.",
+    //   }));
+    // } finally {
+    //   setLoadingByDoc((prev) => ({ ...prev, [docId]: false }));
+    //   delete abortControllersRef.current[docId];
+    // }
   };
 
   const handleCopy = () => {

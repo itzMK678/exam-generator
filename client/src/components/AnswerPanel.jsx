@@ -118,81 +118,32 @@ function AnswerPanel() {
       targetQuestion?.answer ||
       "";
 
+    // ============================================================
+    // STANDARD JSON DISCUSSION (FOR VERCEL COMPATIBILITY)
+    // Non-streaming POST request compatible with standard serverless endpoints
+    // ============================================================
     try {
-      const response = await fetch(
-        `${API_URL}/api/exams/discuss/stream`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            question: targetQuestion.question,
-            answer: targetAnswer,
-            explanation: targetQuestion.explanation || "",
-            messages: updatedMessages,
-          }),
-          signal: controller.signal,
-        }
-      );
+      const response = await fetch(`${API_URL}/api/exams/discuss`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: targetQuestion.question,
+          answer: targetAnswer,
+          explanation: targetQuestion.explanation || "",
+          messages: updatedMessages,
+        }),
+        signal: controller.signal,
+      });
 
-      if (!response.ok) {
-        let errorMsg = "Failed to discuss question.";
-        try {
-          const errData = await response.json();
-          errorMsg = errData.message || errorMsg;
-        } catch {}
-        throw new Error(errorMsg);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to discuss question.");
       }
 
-      if (!response.body) {
-        throw new Error("Streaming is not supported by your browser or empty response body.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const dataStr = trimmed.replace(/^data:\s*/, "");
-          if (dataStr === "[DONE]") {
-            break;
-          }
-
-          try {
-            const parsed = JSON.parse(dataStr);
-            if (parsed.text) {
-              accumulated += parsed.text;
-              updateLastDiscussionMessage(targetQuestion, accumulated);
-            } else if (parsed.error) {
-              throw new Error(parsed.error);
-            }
-          } catch (jsonErr) {
-            // Ignore incomplete chunks or parse failures
-            if (jsonErr.message && !jsonErr.message.includes("JSON")) {
-              throw jsonErr;
-            }
-          }
-        }
-      }
-
-      if (!accumulated.trim()) {
-        updateLastDiscussionMessage(
-          targetQuestion,
-          "No response received from tutor. Please try again."
-        );
-      }
+      updateLastDiscussionMessage(targetQuestion, data.message);
     } catch (error) {
       if (error.name === "AbortError") return;
       console.error("Discussion error:", error);
@@ -204,6 +155,96 @@ function AnswerPanel() {
       setDiscussingByKey((prev) => ({ ...prev, [questionKey]: false }));
       delete abortControllersRef.current[questionKey];
     }
+
+    // ============================================================
+    // [COMMENTED OUT FOR VERCEL] LIVE SSE STREAMING
+    // Uncomment if hosting in an environment with full long-lived SSE streaming support
+    // ============================================================
+    // try {
+    //   const response = await fetch(
+    //     `${API_URL}/api/exams/discuss/stream`,
+    //     {
+    //       method: "POST",
+    //       headers: {
+    //         "Content-Type": "application/json",
+    //       },
+    //       body: JSON.stringify({
+    //         question: targetQuestion.question,
+    //         answer: targetAnswer,
+    //         explanation: targetQuestion.explanation || "",
+    //         messages: updatedMessages,
+    //       }),
+    //       signal: controller.signal,
+    //     }
+    //   );
+    //
+    //   if (!response.ok) {
+    //     let errorMsg = "Failed to discuss question.";
+    //     try {
+    //       const errData = await response.json();
+    //       errorMsg = errData.message || errorMsg;
+    //     } catch {}
+    //     throw new Error(errorMsg);
+    //   }
+    //
+    //   if (!response.body) {
+    //     throw new Error("Streaming is not supported by your browser or empty response body.");
+    //   }
+    //
+    //   const reader = response.body.getReader();
+    //   const decoder = new TextDecoder();
+    //   let buffer = "";
+    //   let accumulated = "";
+    //
+    //   while (true) {
+    //     const { done, value } = await reader.read();
+    //     if (done) break;
+    //
+    //     buffer += decoder.decode(value, { stream: true });
+    //     const lines = buffer.split("\n");
+    //     buffer = lines.pop() || "";
+    //
+    //     for (const line of lines) {
+    //       const trimmed = line.trim();
+    //       if (!trimmed.startsWith("data:")) continue;
+    //       const dataStr = trimmed.replace(/^data:\\s*/, "");
+    //       if (dataStr === "[DONE]") {
+    //         break;
+    //       }
+    //
+    //       try {
+    //         const parsed = JSON.parse(dataStr);
+    //         if (parsed.text) {
+    //           accumulated += parsed.text;
+    //           updateLastDiscussionMessage(targetQuestion, accumulated);
+    //         } else if (parsed.error) {
+    //           throw new Error(parsed.error);
+    //         }
+    //       } catch (jsonErr) {
+    //         if (jsonErr.message && !jsonErr.message.includes("JSON")) {
+    //           throw jsonErr;
+    //         }
+    //       }
+    //     }
+    //   }
+    //
+    //   if (!accumulated.trim()) {
+    //     updateLastDiscussionMessage(
+    //       targetQuestion,
+    //       "No response received from tutor. Please try again."
+    //     );
+    //   }
+    // } catch (error) {
+    //   if (error.name === "AbortError") return;
+    //   console.error("Discussion error:", error);
+    //   updateLastDiscussionMessage(
+    //     targetQuestion,
+    //     `Sorry, I had trouble generating a response: ${error.message || "Please check that the server is online and try again."}`
+    //   );
+    // } finally {
+    //   setDiscussingByKey((prev) => ({ ...prev, [questionKey]: false }));
+    //   delete abortControllersRef.current[questionKey];
+    // }
   };
 
   const handleDiscuss = (event) => {

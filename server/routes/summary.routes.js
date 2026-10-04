@@ -14,10 +14,15 @@ router.post(
   summarizeDocumentController
 );
 
+/*
+// ============================================================
+// [COMMENTED OUT FOR VERCEL] SSE SUMMARY STREAMING
+// ============================================================
 router.post(
   "/summarize/stream",
   aiInteractionLimiter,
   summarizeDocumentStreamController
 );
+*/
 
 export default router;

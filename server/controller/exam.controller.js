@@ -19,6 +19,23 @@ export async function generateExamController(req, res, next) {
       });
     }
 
+    // ============================================================
+    // DIRECT SYNCHRONOUS GENERATION (FOR VERCEL / SERVERLESS)
+    // Background async jobs/PM2/BullMQ/Redis cannot persist across
+    // serverless invocations on Vercel. We generate directly:
+    // ============================================================
+    const result = await generateExam(parseResult.data);
+    return res.status(200).json({
+      success: true,
+      message: "Exam generated successfully.",
+      data: result,
+    });
+
+    /*
+    // ============================================================
+    // [COMMENTED OUT FOR VERCEL] BACKGROUND JOB PATTERN (REDIS / BULLMQ)
+    // Uncomment this section if running on a persistent VPS with Redis / PM2
+    // ============================================================
     // Create a new background tracking job in Redis
     const job = await createJob("exam");
 
@@ -49,6 +66,7 @@ export async function generateExamController(req, res, next) {
       jobId: job.id,
       status: "processing",
     });
+    */
   } catch (error) {
     next(error);
   }

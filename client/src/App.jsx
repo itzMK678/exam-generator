@@ -151,13 +151,17 @@ function App() {
         );
       }
 
-      // Support direct synchronous payload if returned
+      // Support direct synchronous payload (Default for Vercel / serverless)
       if (data.data) {
         setGeneratedExam(data.data);
         return;
       }
 
-      // Asynchronous Job Pattern (202 Accepted)
+      /*
+      // ============================================================
+      // [COMMENTED OUT FOR VERCEL] ASYNCHRONOUS JOB POLLING PATTERN
+      // Used when backend uses BullMQ / Redis background worker queue
+      // ============================================================
       const jobId = data.jobId;
       if (!jobId) {
         throw new Error("The server did not return a valid job ID or generated exam.");
@@ -202,6 +206,7 @@ function App() {
       }
 
       throw new Error("Exam generation timed out. Please try again with fewer questions.");
+      */
     } catch (err) {
       console.error("Exam generation error:", err);
       setError(
@@ -542,9 +547,67 @@ function App() {
 
           {/* FILE LIST */}
           {files.length > 0 && (
-            <div>
-              <div className="mt-4 space-y-2">
-                
+            <div className="mt-4 space-y-2">
+              {files.map((file, index) => (
+                <div
+                  key={`${file.name}-${file.size}-${index}`}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-extrabold ${
+                        getFileType(file.name) === "PDF"
+                          ? "bg-red-50 text-red-600 border border-red-100"
+                          : "bg-blue-50 text-blue-600 border border-blue-100"
+                      }`}
+                    >
+                      {getFileType(file.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isUploading || loading}
+                    onClick={() => removeFile(index)}
+                    aria-label={`Remove ${file.name}`}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200 hover:text-red-600 disabled:opacity-40"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* UPLOAD PROGRESS */}
+          {isUploading && (
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600">
+                  Uploading and extracting text...
+                </span>
+                <span className="text-xs font-bold text-indigo-600">
+                  {uploadProgress}%
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* ==================================================
             STEP 2: SELECT EXAM PREFERENCES
         ================================================== */}
@@ -676,68 +739,6 @@ function App() {
             </div>
           </label>
         </section>
-              </div>
-            <div className="mt-4 space-y-2">
-              {files.map((file, index) => (
-                <div
-                  key={`${file.name}-${file.size}-${index}`}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-extrabold ${
-                        getFileType(file.name) === "PDF"
-                          ? "bg-red-50 text-red-600 border border-red-100"
-                          : "bg-blue-50 text-blue-600 border border-blue-100"
-                      }`}
-                    >
-                      {getFileType(file.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-800">
-                        {file.name}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {formatFileSize(file.size)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={isUploading || loading}
-                    onClick={() => removeFile(index)}
-                    aria-label={`Remove ${file.name}`}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-200 hover:text-red-600 disabled:opacity-40"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-            </div>
-          )}
-
-          {/* UPLOAD PROGRESS */}
-          {isUploading && (
-            <div className="mt-5">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600">
-                  Uploading and extracting text...
-                </span>
-                <span className="text-xs font-bold text-indigo-600">
-                  {uploadProgress}%
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-indigo-600 transition-all duration-300"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </section>
 
 
        
@@ -860,13 +861,13 @@ function App() {
                     🖨️ Print
                   </button>
 
-                   <button
-                type="button"
-                onClick={clearFiles}
-                className="w-fit text-xs rounded-[12px] font-semibold p-2 text-slate-400 transition hover:bg-red-600"
-              >
-                Clear Exam
-              </button>
+                  <button
+                    type="button"
+                    onClick={clearFiles}
+                    className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-600 shadow-2xs transition hover:bg-red-100"
+                  >
+                    Clear Exam
+                  </button>
                 </div>
               </div>
 

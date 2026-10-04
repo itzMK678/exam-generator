@@ -4,7 +4,7 @@ const requiredEnv = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "GEMINI_API_KEY",
-  "REDIS_URL",
+  // "REDIS_URL", // [COMMENTED OUT FOR VERCEL] Redis is optional in serverless mode
 ];
 
 for (const key of requiredEnv) {
@@ -40,7 +40,7 @@ export const env = {
     process.env.GEMINI_GENERATION_MODEL || "gemini-flash-lite-latest",
 
   geminiFallbackModel:
-    process.env.GEMINI_FALLBACK_MODEL || "gemini-3.6-flash",
+    process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash",
 
   maxConcurrentGeminiRequests: Number(
     process.env.MAX_CONCURRENT_GEMINI_REQUESTS || 2
