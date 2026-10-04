@@ -344,7 +344,7 @@ function AnswerPanel() {
               {selectedQuestion.explanation && (
                 <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    Detailed Explanation
+                   Reason 
                   </p>
                   <div className="mt-2 text-slate-600">
                     <MarkdownRenderer content={selectedQuestion.explanation} />
@@ -354,11 +354,11 @@ function AnswerPanel() {
 
               {/* SOURCE PAGES */}
               {sourcePages.length > 0 && (
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-800">
-                    Verified Source Pages
+                <div className="rounded-xl gap-2 border flex flex-wrap justify-between border-indigo-100 bg-indigo-50/60 p-4">
+                  <p className="text-xs mt-1 font-bold uppercase tracking-wider text-indigo-800">
+                    Sourceof this question
                   </p>
-                  <div className="mt-2.5 flex flex-wrap gap-2">
+                  <div className=" gap-2">
                     {sourcePages.map((page, index) => (
                       <span
                         key={index}
@@ -443,7 +443,7 @@ function AnswerPanel() {
                       placeholder="Ask the tutor (Press Enter to send)..."
                       rows={2}
                       disabled={isDiscussing}
-                      className="min-h-[50px] flex-1 resize-none rounded-xl border border-slate-300 p-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 disabled:bg-slate-100"
+                      className="h-[50px] flex-1 resize-none rounded-xl border border-slate-300 p-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100 disabled:bg-slate-100"
                     />
 
                     <button
